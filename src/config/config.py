@@ -4,17 +4,17 @@
 # Author: Nguyen Mau Dung
 # DoC: 2020.05.21
 # email: nguyenmaudung93.kstn@gmail.com
-# project repo: https://github.com/maudzung/TTNet-Realtime-for-Table-Tennis-Pytorch
 -----------------------------------------------------------------------------------
 # Description: The configurations of the project will be defined here
 """
 
-import torch
 import os
-import datetime
 import argparse
-from easydict import EasyDict as edict
 import sys
+
+import torch
+import numpy as np
+from easydict import EasyDict as edict
 
 sys.path.append('../')
 
@@ -22,15 +22,15 @@ from utils.misc import make_folder
 
 
 def parse_configs():
-    parser = argparse.ArgumentParser(description='TTNet Implementation')
+    parser = argparse.ArgumentParser(description='Complexer YOLO Implementation')
     parser.add_argument('--seed', type=int, default=2020,
                         help='re-produce the results with seed random')
-    parser.add_argument('--saved_fn', type=str, default='ttnet', metavar='FN',
+    parser.add_argument('--saved_fn', type=str, default='complexer_yolo', metavar='FN',
                         help='The name using for saving logs, models,...')
     ####################################################################
     ##############     Model configs            ###################
     ####################################################################
-    parser.add_argument('-a', '--arch', type=str, default='ttnet', metavar='ARCH',
+    parser.add_argument('-a', '--arch', type=str, default='yolov3', metavar='ARCH',
                         help='The name of the model architecture')
     parser.add_argument('--dropout_p', type=float, default=0.5, metavar='P',
                         help='The dropout probability of the model')
@@ -192,52 +192,8 @@ def parse_configs():
     ####################################################################
     ##############     Data configs            ###################
     ####################################################################
-    configs.working_dir = '../../'
-    configs.dataset_dir = os.path.join('/media/nmdung/SSD_4TB_Disk_1/TTNet-Pytorch', 'dataset')
-    configs.train_game_list = ['game_1', 'game_2', 'game_3', 'game_4', 'game_5']
-    configs.test_game_list = ['test_1', 'test_2', 'test_3', 'test_4', 'test_5', 'test_6', 'test_7']
-    configs.events_dict = {
-        'bounce': 0,
-        'net': 1,
-        'empty_event': 2
-    }
-    configs.events_weights_loss_dict = {
-        'bounce': 1.,
-        'net': 3.,
-    }
-    configs.events_weights_loss = (configs.events_weights_loss_dict['bounce'], configs.events_weights_loss_dict['net'])
-    configs.num_events = len(configs.events_weights_loss_dict)  # Just "bounce" and "net hits"
-    configs.num_frames_sequence = 9
-
-    configs.org_size = (1920, 1080)
-    configs.input_size = (320, 135)
-
-    configs.tasks = ['seg', 'ball', 'event']
-    if configs.no_ball:
-        if 'ball' in configs.tasks:
-            configs.tasks.remove('ball')
-    if configs.no_event:
-        if 'event' in configs.tasks:
-            configs.tasks.remove('event')
-    if configs.no_seg:
-        if 'seg' in configs.tasks:
-            configs.tasks.remove('seg')
-
-    # Compose loss weight for tasks, normalize the weights later
-    loss_weight_dict = {
-        'ball': configs.ball_weight,
-        'event': configs.event_weight,
-        'seg': configs.seg_weight
-    }
-    configs.tasks_loss_weight = [loss_weight_dict[task] for task in configs.tasks]
-
-    configs.freeze_modules_list = []
-    if configs.freeze_ball:
-        configs.freeze_modules_list.append('ball_stage')
-    if configs.freeze_event:
-        configs.freeze_modules_list.append('events_spotting')
-    if configs.freeze_seg:
-        configs.freeze_modules_list.append('segmentation')
+    configs.working_dir = '../'
+    configs.dataset_dir = os.path.join(configs.working_dir, 'dataset', 'kitti')
 
     ####################################################################
     ############## logs, Checkpoints, and results dir ########################
@@ -265,12 +221,74 @@ def parse_configs():
         configs.save_demo_dir = os.path.join(configs.results_dir, 'demo', configs.saved_fn)
         make_folder(configs.save_demo_dir)
 
+    configs.class_list = ["Car", "Pedestrian", "Cyclist"]
+
+    configs.CLASS_NAME_TO_ID = {
+        'Car': 0,
+        'Pedestrian': 1,
+        'Cyclist': 2,
+        'Van': 0,
+        'Person_sitting': 1,
+    }
+
+    # Front side (of vehicle) Point Cloud boundary for BEV
+    configs.boundary = {
+        "minX": 0,
+        "maxX": 50,
+        "minY": -25,
+        "maxY": 25,
+        "minZ": -2.73,
+        "maxZ": 1.27
+    }
+
+    # Back back (of vehicle) Point Cloud boundary for BEV
+    configs.boundary_back = {
+        "minX": -50,
+        "maxX": 0,
+        "minY": -25,
+        "maxY": 25,
+        "minZ": -2.73,
+        "maxZ": 1.27
+    }
+
+    configs.BEV_WIDTH = 608  # across y axis -25m ~ 25m
+    configs.BEV_HEIGHT = 608  # across x axis 0m ~ 50m
+
+    configs.DISCRETIZATION = (configs.boundary["maxX"] - configs.boundary["minX"]) / configs.BEV_HEIGHT
+
+    configs.colors = [[0, 255, 255], [0, 0, 255], [255, 0, 0]]
+
+    # Following parameters are calculated as an average from KITTI dataset for simplicity
+    #####################################################################################
+    configs.Tr_velo_to_cam = np.array([
+        [7.49916597e-03, -9.99971248e-01, -8.65110297e-04, -6.71807577e-03],
+        [1.18652889e-02, 9.54520517e-04, -9.99910318e-01, -7.33152811e-02],
+        [9.99882833e-01, 7.49141178e-03, 1.18719929e-02, -2.78557062e-01],
+        [0, 0, 0, 1]
+    ])
+
+    # cal mean from train set
+    configs.R0 = np.array([
+        [0.99992475, 0.00975976, -0.00734152, 0],
+        [-0.0097913, 0.99994262, -0.00430371, 0],
+        [0.00729911, 0.0043753, 0.99996319, 0],
+        [0, 0, 0, 1]
+    ])
+
+    configs.P2 = np.array([[719.787081, 0., 608.463003, 44.9538775],
+                           [0., 719.787081, 174.545111, 0.1066855],
+                           [0., 0., 1., 3.0106472e-03],
+                           [0., 0., 0., 0]
+                           ])
+
+    configs.R0_inv = np.linalg.inv(configs.R0)
+    configs.Tr_velo_to_cam_inv = np.linalg.inv(configs.Tr_velo_to_cam)
+    configs.P2_inv = np.linalg.pinv(configs.P2)
+    #####################################################################################
+
     return configs
 
 
 if __name__ == "__main__":
     configs = parse_configs()
     print(configs)
-
-    print(datetime.date.today())
-    print(datetime.datetime.now().year)
