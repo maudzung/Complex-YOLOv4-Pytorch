@@ -16,12 +16,15 @@ import torch
 sys.path.append('../')
 
 from models.yolov4_model import Yolov4
+from models.darknet2pytorch import Darknet
 
 
 def create_model(configs):
     """Create model based on architecture name"""
     if configs.arch == 'yolov4':
-        model = Yolov4(yolov4conv137weight=None, n_classes=80, inference=False)
+        model = Yolov4(yolov4conv137weight=configs.yolov4conv137weight, n_classes=configs.n_classes, inference=False)
+    elif (configs.arch == 'darknet') and (configs.cfgfile is not None):
+        model = Darknet(cfgfile=configs.cfgfile, inference=False)
     else:
         assert False, 'Undefined model backbone'
 
