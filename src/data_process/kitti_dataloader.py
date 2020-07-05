@@ -61,6 +61,9 @@ if __name__ == '__main__':
 
     from config.config import parse_configs
     import data_process.kitti_bev_utils as bev_utils
+    from data_process import kitti_data_utils
+    from inference.prediction_utils import invert_target
+    from utils.visualization_utils import show_image_with_boxes
 
     configs = parse_configs()
     configs.distributed = False  # For testing
@@ -69,7 +72,12 @@ if __name__ == '__main__':
 
     img_size = configs.BEV_WIDTH
 
-    for batch_i, (_, imgs, targets) in enumerate(val_dataloader):
+    for batch_i, (img_files, imgs, targets) in enumerate(val_dataloader):
+        img_file = img_files[0]
+        img_rgb = cv2.imread(img_file)
+        calib = kitti_data_utils.Calibration(img_file.replace(".png", ".txt").replace("image_2", "calib"))
+        objects_pred = invert_target(targets[:, 1:], calib, img_rgb.shape, RGB_Map=None)
+        img_rgb = show_image_with_boxes(img_rgb, objects_pred, calib, False)
 
         # Rescale target
         targets[:, 2:6] *= img_size
@@ -86,6 +94,7 @@ if __name__ == '__main__':
             bev_utils.drawRotatedBox(img_display, x, y, w, l, yaw, configs.colors[int(c)])
 
         cv2.imshow('img-kitti-bev', img_display)
+        cv2.imshow('img_rgb', img_rgb)
 
         if cv2.waitKey(0) & 0xff == 27:
             break
