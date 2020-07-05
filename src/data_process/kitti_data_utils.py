@@ -1,3 +1,9 @@
+"""
+# -*- coding: utf-8 -*-
+-----------------------------------------------------------------------------------
+# Refer: https://github.com/ghimiredhikura/Complex-YOLOv3
+"""
+
 from __future__ import print_function
 
 import numpy as np

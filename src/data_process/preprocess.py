@@ -1,3 +1,9 @@
+"""
+# -*- coding: utf-8 -*-
+-----------------------------------------------------------------------------------
+# Refer: https://github.com/ghimiredhikura/Complex-YOLOv3
+"""
+
 import numpy as np
 from scipy.misc import imread
 

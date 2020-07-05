@@ -51,8 +51,8 @@ def parse_configs():
     ####################################################################
     ##############     Dataloader and Running configs            #######
     ####################################################################
-    parser.add_argument('--no-val', action='store_true',
-                        help='If true, use all data for training, no validation set')
+    parser.add_argument('--multiscale_training', action='store_true',
+                        help='If true, use scaling data for training')
     parser.add_argument('--no-test', action='store_true',
                         help='If true, dont evaluate the model on the test set')
     parser.add_argument('--val-size', type=float, default=0.2,

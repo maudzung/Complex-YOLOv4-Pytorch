@@ -1,7 +1,18 @@
-import numpy as np
+"""
+# -*- coding: utf-8 -*-
+-----------------------------------------------------------------------------------
+# Refer: https://github.com/ghimiredhikura/Complex-YOLOv3
+"""
+
 import math
+import sys
+
 import cv2
-import utils.config as cnf
+import numpy as np
+
+sys.path.append('../')
+
+import config.kitti_config as cnf
 
 
 def removePoints(PointCloud, BoundaryCond):

@@ -1,3 +1,10 @@
+"""
+# -*- coding: utf-8 -*-
+-----------------------------------------------------------------------------------
+# Refer: https://github.com/ghimiredhikura/Complex-YOLOv3
+"""
+
+import sys
 import os
 from glob import glob
 import random
@@ -8,9 +15,9 @@ import torch
 import torch.nn.functional as F
 import cv2
 
-from data_process import transformation
-from data_process import kitti_bev_utils
-from data_process import kitti_data_utils
+sys.path.append('../')
+
+from data_process import transformation, kitti_bev_utils, kitti_data_utils
 
 
 def resize(image, size):

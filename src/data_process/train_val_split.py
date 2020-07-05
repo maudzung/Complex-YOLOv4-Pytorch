@@ -1,3 +1,9 @@
+"""
+# -*- coding: utf-8 -*-
+-----------------------------------------------------------------------------------
+# Refer: https://github.com/ghimiredhikura/Complex-YOLOv3
+"""
+
 import os
 
 from sklearn.model_selection import train_test_split
