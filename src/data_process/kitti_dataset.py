@@ -101,7 +101,7 @@ class KittiDataset(Dataset):
 
             if self.data_aug:
                 if np.random.random() < 0.5:
-                    img, targets = self.horisontal_flip(img, targets)
+                    img, targets = self.horizontal_flip(img, targets)
 
             return img_file, img, targets
 
@@ -168,7 +168,7 @@ class KittiDataset(Dataset):
         self.batch_count += 1
         return paths, imgs, targets
 
-    def horisontal_flip(self, images, targets):
+    def horizontal_flip(self, images, targets):
         images = torch.flip(images, [-1])
         targets[:, 2] = 1 - targets[:, 2]  # horizontal flip
         targets[:, 6] = - targets[:, 6]  # yaw angle flip
