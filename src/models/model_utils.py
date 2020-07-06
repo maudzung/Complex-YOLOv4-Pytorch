@@ -42,18 +42,6 @@ def get_num_parameters(model):
     return num_parameters
 
 
-def freeze_model(model, freeze_modules_list):
-    """Freeze modules of the model based on the configuration"""
-    for layer_name, p in model.named_parameters():
-        p.requires_grad = True
-        for freeze_module in freeze_modules_list:
-            if freeze_module in layer_name:
-                p.requires_grad = False
-                break
-
-    return model
-
-
 def load_pretrained_model(model, pretrained_path, gpu_idx, overwrite_global_2_local):
     """Load weights from the pretrained model"""
     assert os.path.isfile(pretrained_path), "=> no checkpoint found at '{}'".format(pretrained_path)

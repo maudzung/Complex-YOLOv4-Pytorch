@@ -16,7 +16,6 @@ sys.path.append('./')
 
 from data_process.kitti_dataloader import create_train_val_dataloader, create_test_dataloader
 from models.model_utils import create_model, load_pretrained_model, make_data_parallel, resume_model, get_num_parameters
-from models.model_utils import freeze_model
 from train_utils import create_optimizer, create_lr_scheduler, get_saved_state, save_checkpoint
 from train_utils import reduce_tensor, to_python_float
 from utils.misc import AverageMeter, ProgressMeter
@@ -86,9 +85,6 @@ def main_worker(gpu_idx, configs):
 
     # Data Parallel
     model = make_data_parallel(model, configs)
-
-    # Freeze model
-    model = freeze_model(model, configs.freeze_modules_list)
 
     if configs.is_master_node:
         num_parameters = get_num_parameters(model)
