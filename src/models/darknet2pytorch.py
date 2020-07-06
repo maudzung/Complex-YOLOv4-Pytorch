@@ -284,7 +284,7 @@ class Darknet(nn.Module):
                 elif activation == 'mish':
                     model.add_module('mish{0}'.format(conv_id), Mish())
                 else:
-                    print("convalution havn't activate {}".format(activation))
+                    print("[INFO] No error, the convolution haven't activate {}".format(activation))
 
                 prev_filters = filters
                 out_filters.append(prev_filters)

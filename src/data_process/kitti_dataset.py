@@ -92,6 +92,7 @@ class KittiDataset(Dataset):
             for i, t in enumerate(target):
                 if t.sum(0):
                     ntargets += 1
+            # (box_idx, class, y, x, w, l, sin(yaw), cos(yaw))
             targets = torch.zeros((ntargets, 8))
             for i, t in enumerate(target):
                 if t.sum(0):

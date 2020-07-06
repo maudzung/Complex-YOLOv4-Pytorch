@@ -24,6 +24,7 @@ def create_model(configs):
     if configs.arch == 'yolov4':
         model = Yolov4(yolov4conv137weight=configs.yolov4conv137weight, n_classes=configs.n_classes, inference=False)
     elif (configs.arch == 'darknet') and (configs.cfgfile is not None):
+        print('using darknet')
         model = Darknet(cfgfile=configs.cfgfile, inference=False)
     else:
         assert False, 'Undefined model backbone'
@@ -128,7 +129,9 @@ def make_data_parallel(model, configs):
 
 
 if __name__ == '__main__':
-    from config.config import get_default_configs
+    from torchsummary import summary
+    from config.config import parse_configs
 
-    configs = get_default_configs()
+    configs = parse_configs()
     model = create_model(configs)
+    summary(model.cuda(), (3, 608, 608))

@@ -30,8 +30,10 @@ def parse_configs():
     ####################################################################
     ##############     Model configs            ###################
     ####################################################################
-    parser.add_argument('-a', '--arch', type=str, default='yolov3', metavar='ARCH',
+    parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
+    parser.add_argument('--cfgfile', type=str, default=None, metavar='PATH',
+                        help='The path for cfgfile (only for darknet)')
     parser.add_argument('--dropout_p', type=float, default=0.5, metavar='P',
                         help='The dropout probability of the model')
     parser.add_argument('--multitask_learning', action='store_true',
