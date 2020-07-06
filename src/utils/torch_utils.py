@@ -76,6 +76,10 @@ def convert2cpu_long(gpu_matrix):
     return torch.LongTensor(gpu_matrix.size()).copy_(gpu_matrix)
 
 
+def to_cpu(tensor):
+    return tensor.detach().cpu()
+
+
 def do_detect(model, img, conf_thresh, nms_thresh, use_cuda=1):
     model.eval()
     t0 = time.time()

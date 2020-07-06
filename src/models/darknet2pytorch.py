@@ -150,6 +150,8 @@ class Darknet(nn.Module):
         self.height = int(self.blocks[0]['height'])
 
         self.models = self.create_network(self.blocks)  # merge conv, bn,leaky
+        self.yolo_layers = [layer[0] for layer in self.models if hasattr(layer[0], "metrics")]
+
         self.loss = self.models[len(self.models) - 1]
 
         if self.blocks[(len(self.blocks) - 1)]['type'] == 'region':
@@ -161,11 +163,12 @@ class Darknet(nn.Module):
         self.header = torch.IntTensor([0, 0, 0, 0])
         self.seen = 0
 
-    def forward(self, x):
+    def forward(self, x, targets=None):
         ind = -2
         self.loss = None
         outputs = dict()
-        out_boxes = []
+        loss = 0.
+        yolo_outputs = []
         for block in self.blocks:
             ind = ind + 1
             # if ind > 0:
@@ -224,19 +227,16 @@ class Darknet(nn.Module):
                     self.loss = self.models[ind](x)
                 outputs[ind] = None
             elif block['type'] == 'yolo':
-                # if self.training:
-                #     pass
-                # else:
-                #     boxes = self.models[ind](x)
-                #     out_boxes.append(boxes)
-                boxes = self.models[ind](x)
-                out_boxes.append(boxes)
+                x, layer_loss = self.models[ind](x, targets)
+                loss += layer_loss
+                yolo_outputs.append(x)
             elif block['type'] == 'cost':
                 continue
             else:
                 print('unknown type %s' % (block['type']))
+        yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
 
-        return out_boxes
+        return loss, yolo_outputs
 
     def inference(self, x):
         ind = -2
@@ -489,10 +489,7 @@ class Darknet(nn.Module):
                 yolo_layer.anchor_step = len(yolo_layer.anchors) // yolo_layer.num_anchors
                 yolo_layer.stride = prev_stride
                 yolo_layer.scale_x_y = float(block['scale_x_y'])
-                # yolo_layer.object_scale = float(block['object_scale'])
-                # yolo_layer.noobject_scale = float(block['noobject_scale'])
-                # yolo_layer.class_scale = float(block['class_scale'])
-                # yolo_layer.coord_scale = float(block['coord_scale'])
+                yolo_layer.ignore_thresh = float(block['ignore_thresh'])
                 out_filters.append(prev_filters)
                 out_strides.append(prev_stride)
                 models.append(yolo_layer)

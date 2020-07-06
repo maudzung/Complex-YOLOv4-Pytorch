@@ -21,7 +21,6 @@ from train_utils import reduce_tensor, to_python_float
 from utils.misc import AverageMeter, ProgressMeter
 from utils.logger import Logger
 from config.config import parse_configs
-from losses.losses import Yolo_loss
 
 
 def main():
@@ -133,8 +132,6 @@ def main_worker(gpu_idx, configs):
         print('Evaluate, val_loss: {}'.format(val_loss))
         return
 
-    criterion = Yolo_loss(device=configs.device, batch=configs.batch // configs.subdivisions, n_classes=configs.classes)
-
     for epoch in range(configs.start_epoch, configs.num_epochs + 1):
         # Get the current learning rate
         for param_group in optimizer.param_groups:
@@ -148,16 +145,16 @@ def main_worker(gpu_idx, configs):
         if configs.distributed:
             train_sampler.set_epoch(epoch)
         # train for one epoch
-        train_loss = train_one_epoch(train_loader, model, optimizer, criterion, epoch, configs, logger)
+        train_loss = train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_writer)
         loss_dict = {'train': train_loss}
         if not configs.no_val:
-            val_loss = evaluate_one_epoch(val_loader, model, criterion, epoch, configs, logger)
+            val_loss = evaluate_one_epoch(val_loader, model, epoch, configs, logger, tb_writer)
             is_best = val_loss <= best_val_loss
             best_val_loss = min(val_loss, best_val_loss)
             loss_dict['val'] = val_loss
 
         if not configs.no_test:
-            test_loss = evaluate_one_epoch(test_loader, model, criterion, epoch, configs, logger)
+            test_loss = evaluate_one_epoch(test_loader, model, epoch, configs, logger, tb_writer)
             loss_dict['test'] = test_loss
         # Write tensorboard
         if tb_writer is not None:
@@ -195,7 +192,7 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def train_one_epoch(train_loader, model, optimizer, criterion, epoch, configs, logger):
+def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, writer):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -214,7 +211,7 @@ def train_one_epoch(train_loader, model, optimizer, criterion, epoch, configs, l
 
         targets = targets.to(configs.device, non_blocking=True)
         imgs = imgs.to(configs.device, non_blocking=True)
-        bboxes_pred = model(imgs)
+        total_loss, outputs = model(imgs, targets)
 
         # For torch.nn.DataParallel case
         if (not configs.distributed) and (configs.gpu_idx is None):
@@ -235,6 +232,15 @@ def train_one_epoch(train_loader, model, optimizer, criterion, epoch, configs, l
         torch.cuda.synchronize()
         batch_time.update(time.time() - start_time)
 
+        # Tensorboard
+        tensorboard_log = {}
+        for j, yolo in enumerate(model.yolo_layers):
+            for name, metric in yolo.metrics.items():
+                if j == 0:
+                    tensorboard_log['train/{}'.format(name)] = metric
+                else:
+                    tensorboard_log['train/{}'.format(name)] += metric
+
         # Log message
         if logger is not None:
             if ((batch_idx + 1) % configs.print_freq) == 0:
@@ -245,7 +251,7 @@ def train_one_epoch(train_loader, model, optimizer, criterion, epoch, configs, l
     return losses.avg
 
 
-def evaluate_one_epoch(val_loader, model, criterion, epoch, configs, logger):
+def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
