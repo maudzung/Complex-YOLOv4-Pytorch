@@ -192,7 +192,7 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, writer):
+def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_writer):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -200,12 +200,15 @@ def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, writ
     progress = ProgressMeter(len(train_loader), [batch_time, data_time, losses],
                              prefix="Train - Epoch: [{}/{}]".format(epoch, configs.num_epochs))
 
+    num_iters_per_epoch = len(train_loader)
+
     # switch to train mode
     model.train()
     start_time = time.time()
     for batch_idx, batch_data in enumerate(tqdm(train_loader)):
         data_time.update(time.time() - start_time)
         _, imgs, targets = batch_data
+        global_step = num_iters_per_epoch * (epoch - 1) + batch_idx + 1
 
         batch_size = imgs.size(0)
 
@@ -237,9 +240,12 @@ def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, writ
         for j, yolo in enumerate(model.yolo_layers):
             for name, metric in yolo.metrics.items():
                 if j == 0:
-                    tensorboard_log['train/{}'.format(name)] = metric
+                    tensorboard_log['{}'.format(name)] = metric
                 else:
-                    tensorboard_log['train/{}'.format(name)] += metric
+                    tensorboard_log['{}'.format(name)] += metric
+
+        if tb_writer is not None:
+            tb_writer.add_scalars('Train', tensorboard_log, global_step)
 
         # Log message
         if logger is not None:
