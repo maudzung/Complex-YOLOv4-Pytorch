@@ -23,7 +23,7 @@ from utils.train_utils import reduce_tensor, to_python_float, get_tensorboard_lo
 from utils.misc import AverageMeter, ProgressMeter
 from utils.logger import Logger
 from config.config import parse_configs
-from utils.evaluation_utils import non_max_suppression_rotated_bbox, get_batch_statistics_rotated_bbox, ap_per_class
+from utils.evaluation_utils import post_processing, get_batch_statistics_rotated_bbox, ap_per_class
 
 
 def main():
@@ -249,7 +249,7 @@ def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
             imgs = imgs.to(configs.device, non_blocking=True)
 
             outputs = model(imgs)
-            outputs = non_max_suppression_rotated_bbox(outputs, conf_thresh=conf_thresh, nms_thresh=nms_thresh)
+            outputs = post_processing(outputs, conf_thresh=conf_thresh, nms_thresh=nms_thresh)
 
             sample_metrics += get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold=iou_threshold)
 

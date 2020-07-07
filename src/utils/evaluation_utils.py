@@ -339,14 +339,14 @@ def nms_cpu(boxes, confs, nms_thresh=0.5):
     return np.array(keep)
 
 
-def non_max_suppression_rotated_bbox(outputs, conf_thresh=0.95, nms_thresh=0.4):
+def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
     """
         Removes detections with lower object confidence score than 'conf_thres' and performs
         Non-Maximum Suppression to further filter detections.
         Returns detections with shape:
             (x, y, w, l, im, re, object_conf, class_score, class_pred)
     """
-    print('doing non_max_suppression_rotated_bbox')
+    print('doing post_processing')
     start_time = time.time()
 
     if type(outputs).__name__ != 'ndarray':
@@ -407,4 +407,4 @@ if __name__ == '__main__':
 
     prediction = torch.randn((4, 22743, 10))
     print('prediction size: {}'.format(prediction.size()))
-    output = non_max_suppression_rotated_bbox(prediction, conf_thresh=0.99999, nms_thresh=0.9999)
+    output = post_processing(prediction, conf_thresh=0.99999, nms_thresh=0.9999)
