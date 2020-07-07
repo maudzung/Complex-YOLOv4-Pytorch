@@ -18,8 +18,8 @@ sys.path.append('./')
 
 from data_process.kitti_dataloader import create_train_val_dataloader
 from models.model_utils import create_model, load_pretrained_model, make_data_parallel, resume_model, get_num_parameters
-from train_utils import create_optimizer, create_lr_scheduler, get_saved_state, save_checkpoint
-from train_utils import reduce_tensor, to_python_float, get_tensorboard_log
+from utils.train_utils import create_optimizer, create_lr_scheduler, get_saved_state, save_checkpoint
+from utils.train_utils import reduce_tensor, to_python_float, get_tensorboard_log
 from utils.misc import AverageMeter, ProgressMeter
 from utils.logger import Logger
 from config.config import parse_configs

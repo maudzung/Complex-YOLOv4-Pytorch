@@ -33,6 +33,25 @@ def compute_iou(box, boxes):
     return np.array(iou, dtype=np.float32)
 
 
+def compute_iou_nms(idx_self, idx_other, polygons, areas):
+    """Calculates IoU of the given box with the array of the given boxes.
+    box: a polygon
+    boxes: a vector of polygons
+    Note: the areas are passed in rather than calculated here for
+    efficiency. Calculate once in the caller to avoid duplicate work.
+    """
+    # Calculate intersection areas
+    ious = []
+    box1 = polygons[idx_self]
+    for idx in idx_other:
+        box2 = polygons[idx]
+        intersection = box1.intersection(box2).area
+        iou = intersection / (areas[idx] + areas[idx_self] - intersection + 1e-12)
+        ious.append(iou)
+
+    return np.array(ious, dtype=np.float32)
+
+
 def to_cpu(tensor):
     return tensor.detach().cpu()
 
@@ -261,20 +280,20 @@ def rotated_bbox_iou_polygon(box1, box2):
     return compute_iou(bbox1[0], bbox2)
 
 
-def compute_areas(boxes):
+def compute_polygons(boxes):
     """
 
     :param boxes: [num, 6]
     :return:
     """
-    areas = []
+    polygons = []
     for (x, y, w, l, im, re) in boxes:
         angle = np.arctan2(im, re)
         bev_corners = bev_utils.get_corners(x, y, w, l, angle)
-        areas.append(bev_corners)
-    areas = convert_format(np.array(areas))
+        polygons.append(bev_corners)
+    polygons = convert_format(np.array(polygons))
 
-    return areas
+    return polygons
 
 
 def nms_cpu(boxes, confs, nms_thresh=0.5):
@@ -292,7 +311,12 @@ def nms_cpu(boxes, confs, nms_thresh=0.5):
     print('inside nms_cpu - done 1: {}'.format(time.time() - nms_cpu_start_time))
     nms_cpu_start_time = time.time()
 
-    areas = compute_areas(boxes)  # 4 vertices of the box
+    polygons = compute_polygons(boxes)  # 4 vertices of the box
+
+    print('inside nms_cpu - done 1.5: {}'.format(time.time() - nms_cpu_start_time))
+    nms_cpu_start_time = time.time()
+
+    areas = [polygon.area for polygon in polygons]
 
     print('inside nms_cpu - done 2: {}'.format(time.time() - nms_cpu_start_time))
     nms_cpu_start_time = time.time()
@@ -304,7 +328,7 @@ def nms_cpu(boxes, confs, nms_thresh=0.5):
         idx_other = order[1:]
         keep.append(idx_self)
         compute_iou_start_time = time.time()
-        over = compute_iou(areas[idx_self], areas[idx_other])
+        over = compute_iou_nms(idx_self, idx_other, polygons, areas)
         print('end compute_iou: {}'.format(time.time() - compute_iou_start_time))
         inds = np.where(over <= nms_thresh)[0]
         order = order[inds + 1]
@@ -383,4 +407,4 @@ if __name__ == '__main__':
 
     prediction = torch.randn((4, 22743, 10))
     print('prediction size: {}'.format(prediction.size()))
-    output = non_max_suppression_rotated_bbox(prediction, conf_thresh=0.95, nms_thresh=0.4)
+    output = non_max_suppression_rotated_bbox(prediction, conf_thresh=0.99999, nms_thresh=0.9999)
