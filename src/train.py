@@ -148,8 +148,8 @@ def main_worker(gpu_idx, configs):
 
         # Save checkpoint
         if configs.is_master_node and ((epoch % configs.checkpoint_freq) == 0):
-            saved_state = get_saved_state(model, optimizer, lr_scheduler, epoch, configs)
-            save_checkpoint(configs.checkpoints_dir, configs.saved_fn, saved_state, epoch)
+            model_state_dict, utils_state_dict = get_saved_state(model, optimizer, lr_scheduler, epoch, configs)
+            save_checkpoint(configs.checkpoints_dir, configs.saved_fn, model_state_dict, utils_state_dict, epoch)
 
     if tb_writer is not None:
         tb_writer.close()

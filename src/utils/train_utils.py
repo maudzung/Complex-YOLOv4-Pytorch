@@ -60,23 +60,25 @@ def get_saved_state(model, optimizer, lr_scheduler, epoch, configs):
         model_state_dict = model.module.state_dict()
     else:
         model_state_dict = model.state_dict()
-    saved_state = {
+    utils_state_dict = {
         'epoch': epoch,
         'configs': configs,
         'optimizer': copy.deepcopy(optimizer.state_dict()),
-        'lr_scheduler': lr_scheduler.state_dict(),
-        'state_dict': model_state_dict,
+        'lr_scheduler': copy.deepcopy(lr_scheduler.state_dict())
     }
 
-    return saved_state
+    return model_state_dict, utils_state_dict
 
 
-def save_checkpoint(checkpoints_dir, saved_fn, saved_state, epoch):
+def save_checkpoint(checkpoints_dir, saved_fn, model_state_dict, utils_state_dict, epoch):
     """Save checkpoint every epoch only is best model or after every checkpoint_freq epoch"""
-    save_path = os.path.join(checkpoints_dir, '{}_epoch_{}.pth'.format(saved_fn, epoch))
+    model_save_path = os.path.join(checkpoints_dir, 'Model_{}_epoch_{}.pth'.format(saved_fn, epoch))
+    utils_save_path = os.path.join(checkpoints_dir, 'Utils_{}_epoch_{}.pth'.format(saved_fn, epoch))
 
-    torch.save(saved_state, save_path)
-    print('save a checkpoint at {}'.format(save_path))
+    torch.save(model_state_dict, model_save_path)
+    torch.save(utils_state_dict, utils_save_path)
+
+    print('save a checkpoint at {}'.format(model_save_path))
 
 
 def reduce_tensor(tensor, world_size):
