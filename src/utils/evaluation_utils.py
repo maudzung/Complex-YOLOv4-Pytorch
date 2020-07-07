@@ -46,27 +46,6 @@ def load_classes(path):
     return names
 
 
-def parse_model_config(path):
-    """Parses the yolo-v3 layer configuration file and returns module definitions"""
-    file = open(path, 'r')
-    lines = file.read().split('\n')
-    lines = [x for x in lines if x and not x.startswith('#')]
-    lines = [x.rstrip().lstrip() for x in lines]  # get rid of fringe whitespaces
-    module_defs = []
-    for line in lines:
-        if line.startswith('['):  # This marks the start of a new block
-            module_defs.append({})
-            module_defs[-1]['type'] = line[1:-1].rstrip()
-            if module_defs[-1]['type'] == 'convolutional':
-                module_defs[-1]['batch_normalize'] = 0
-        else:
-            key, value = line.split("=")
-            value = value.strip()
-            module_defs[-1][key.rstrip()] = value.strip()
-
-    return module_defs
-
-
 def weights_init_normal(m):
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:
@@ -282,112 +261,126 @@ def rotated_bbox_iou_polygon(box1, box2):
     return compute_iou(bbox1[0], bbox2)
 
 
-def non_max_suppression_rotated_bbox(prediction, conf_thres=0.95, nms_thres=0.4):
+def compute_areas(boxes):
+    """
+
+    :param boxes: [num, 6]
+    :return:
+    """
+    areas = []
+    for (x, y, w, l, im, re) in boxes:
+        angle = np.arctan2(im, re)
+        bev_corners = bev_utils.get_corners(x, y, w, l, angle)
+        areas.append(bev_corners)
+    areas = convert_format(np.array(areas))
+
+    return areas
+
+
+def nms_cpu(boxes, confs, nms_thresh=0.5):
+    """
+
+    :param boxes: [num, 6]
+    :param confs: [num, num_classes]
+    :param nms_thresh:
+    :param min_mode:
+    :return:
+    """
+    # order of reduce confidence (high --> low)
+    nms_cpu_start_time = time.time()
+    order = confs.argsort()[::-1]
+    print('inside nms_cpu - done 1: {}'.format(time.time() - nms_cpu_start_time))
+    nms_cpu_start_time = time.time()
+
+    areas = compute_areas(boxes)  # 4 vertices of the box
+
+    print('inside nms_cpu - done 2: {}'.format(time.time() - nms_cpu_start_time))
+    nms_cpu_start_time = time.time()
+
+    keep = []
+    while order.size > 0:
+        print('order: {}'.format(order.size))
+        idx_self = order[0]
+        idx_other = order[1:]
+        keep.append(idx_self)
+        compute_iou_start_time = time.time()
+        over = compute_iou(areas[idx_self], areas[idx_other])
+        print('end compute_iou: {}'.format(time.time() - compute_iou_start_time))
+        inds = np.where(over <= nms_thresh)[0]
+        order = order[inds + 1]
+
+    print('inside nms_cpu - done 3: {}'.format(time.time() - nms_cpu_start_time))
+    nms_cpu_start_time = time.time()
+
+    return np.array(keep)
+
+
+def non_max_suppression_rotated_bbox(outputs, conf_thresh=0.95, nms_thresh=0.4):
     """
         Removes detections with lower object confidence score than 'conf_thres' and performs
         Non-Maximum Suppression to further filter detections.
         Returns detections with shape:
             (x, y, w, l, im, re, object_conf, class_score, class_pred)
     """
+    print('doing non_max_suppression_rotated_bbox')
+    start_time = time.time()
 
-    output = [None for _ in range(len(prediction))]
-    for image_idx, image_pred in enumerate(prediction):
-        # Filter out confidence scores below threshold
-        image_pred = image_pred[image_pred[:, 6] >= conf_thres]
-        # If none are remaining => process next image
-        if not image_pred.size(0):
-            continue
-        # Object confidence times class confidence
-        score = image_pred[:, 6] * image_pred[:, 7:].max(1)[0]
-        # Sort by it
-        image_pred = image_pred[(-score).argsort()]
-        class_confs, class_preds = image_pred[:, 7:].max(1, keepdim=True)
-        detections = torch.cat((image_pred[:, :7].float(), class_confs.float(), class_preds.float()), 1)
-        # Perform non-maximum suppression
-        keep_boxes = []
-        while detections.size(0):
-            # large_overlap = rotated_bbox_iou(detections[0, :6].unsqueeze(0), detections[:, :6], 1.0, False) > nms_thres # not working
-            large_overlap = rotated_bbox_iou_polygon(detections[0, :6], detections[:, :6]) > nms_thres
-            # large_overlap = torch.from_numpy(large_overlap.astype('uint8'))
-            large_overlap = torch.from_numpy(large_overlap)
-            label_match = detections[0, -1] == detections[:, -1]
-            # Indices of boxes with lower confidence scores, large IOUs and matching labels
-            invalid = large_overlap & label_match
-            weights = detections[invalid, 6:7]
-            # Merge overlapping bboxes by order of confidence
-            detections[0, :6] = (weights * detections[invalid, :6]).sum(0) / weights.sum()
-            keep_boxes += [detections[0]]
-            detections = detections[~invalid]
-        if keep_boxes:
-            output[image_idx] = torch.stack(keep_boxes)
+    if type(outputs).__name__ != 'ndarray':
+        outputs = outputs.numpy()
+    # outputs shape: (batch_size, 22743, 10)
+    batch_size = outputs.shape[0]
+    # box_array: [batch, num, 6]
+    box_array = outputs[:, :, :6]
 
-    return output
+    # confs: [batch, num, num_classes]
+    confs = outputs[:, :, 6:7] * outputs[:, :, 7:]
+    print('done 1: {}'.format(time.time() - start_time))
+    start_time = time.time()
+
+    # [batch, num, num_classes] --> [batch, num]
+    max_conf = np.max(confs, axis=2)
+    max_id = np.argmax(confs, axis=2)
+
+    bboxes_batch = [None for _ in range(batch_size)]
+    print('done 2: {}'.format(time.time() - start_time))
+
+    for i in range(batch_size):
+        start_time = time.time()
+
+        argwhere = max_conf[i] > conf_thresh
+        l_box_array = box_array[i, argwhere, :]
+        l_max_conf = max_conf[i, argwhere]
+        l_max_id = max_id[i, argwhere]
+
+        print('i = {}, done 1: {}'.format(i, time.time() - start_time))
+        start_time = time.time()
+
+        keep = nms_cpu(l_box_array, l_max_conf, nms_thresh=nms_thresh)
+
+        print('i = {}, done 2: {}'.format(i, time.time() - start_time))
+        start_time = time.time()
+
+        bboxes = []
+        if (keep.size > 0):
+            l_box_array = l_box_array[keep, :]
+            l_max_conf = l_max_conf[keep]
+            l_max_id = l_max_id[keep]
+
+            for j in range(l_box_array.shape[0]):
+                bboxes.append(
+                    [l_box_array[j, 0], l_box_array[j, 1], l_box_array[j, 2], l_box_array[j, 3], l_box_array[j, 4],
+                     l_box_array[j, 5], l_max_conf[j], l_max_id[j]])
+        print('i = {}, done 3: {}'.format(i, time.time() - start_time))
+        start_time = time.time()
+        if len(bboxes) > 0:
+            bboxes_batch[i] = bboxes
+
+    return bboxes_batch
 
 
-def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
-    ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
-    FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.ByteTensor
+if __name__ == '__main__':
+    import time
 
-    nB = pred_boxes.size(0)
-    nA = pred_boxes.size(1)
-    nC = pred_cls.size(-1)
-    nG = pred_boxes.size(2)
-
-    # Output tensors
-    obj_mask = ByteTensor(nB, nA, nG, nG).fill_(0)
-    noobj_mask = ByteTensor(nB, nA, nG, nG).fill_(1)
-    class_mask = FloatTensor(nB, nA, nG, nG).fill_(0)
-    iou_scores = FloatTensor(nB, nA, nG, nG).fill_(0)
-    tx = FloatTensor(nB, nA, nG, nG).fill_(0)
-    ty = FloatTensor(nB, nA, nG, nG).fill_(0)
-    tw = FloatTensor(nB, nA, nG, nG).fill_(0)
-    th = FloatTensor(nB, nA, nG, nG).fill_(0)
-    tim = FloatTensor(nB, nA, nG, nG).fill_(0)
-    tre = FloatTensor(nB, nA, nG, nG).fill_(0)
-    tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
-
-    # Convert to position relative to box
-    target_boxes = target[:, 2:8]
-
-    gxy = target_boxes[:, :2] * nG
-    gwh = target_boxes[:, 2:4] * nG
-    gimre = target_boxes[:, 4:]
-
-    # Get anchors with best iou
-    ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre) for anchor in anchors])
-
-    best_ious, best_n = ious.max(0)
-    b, target_labels = target[:, :2].long().t()
-
-    gx, gy = gxy.t()
-    gw, gh = gwh.t()
-    gim, gre = gimre.t()
-    gi, gj = gxy.long().t()
-    # Set masks
-    obj_mask[b, best_n, gj, gi] = 1
-    noobj_mask[b, best_n, gj, gi] = 0
-
-    # Set noobj mask to zero where iou exceeds ignore threshold
-    for i, anchor_ious in enumerate(ious.t()):
-        noobj_mask[b[i], anchor_ious > ignore_thres, gj[i], gi[i]] = 0
-
-    # Coordinates
-    tx[b, best_n, gj, gi] = gx - gx.floor()
-    ty[b, best_n, gj, gi] = gy - gy.floor()
-    # Width and height
-    tw[b, best_n, gj, gi] = torch.log(gw / anchors[best_n][:, 0] + 1e-16)
-    th[b, best_n, gj, gi] = torch.log(gh / anchors[best_n][:, 1] + 1e-16)
-    # Im and real part
-    tim[b, best_n, gj, gi] = gim
-    tre[b, best_n, gj, gi] = gre
-
-    # One-hot encoding of label
-    tcls[b, best_n, gj, gi, target_labels] = 1
-    # Compute label correctness and iou at best anchor
-    class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-
-    rotated_iou_scores = rotated_box_11_iou_polygon(pred_boxes[b, best_n, gj, gi], target_boxes, nG)
-    iou_scores[b, best_n, gj, gi] = rotated_iou_scores.to('cuda:0')
-
-    tconf = obj_mask.float()
-    return iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf
+    prediction = torch.randn((4, 22743, 10))
+    print('prediction size: {}'.format(prediction.size()))
+    output = non_max_suppression_rotated_bbox(prediction, conf_thresh=0.95, nms_thresh=0.4)
