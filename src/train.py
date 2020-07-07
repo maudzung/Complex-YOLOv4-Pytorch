@@ -17,7 +17,7 @@ from tqdm import tqdm
 sys.path.append('./')
 
 from data_process.kitti_dataloader import create_train_val_dataloader
-from models.model_utils import create_model, load_pretrained_model, make_data_parallel, resume_model, get_num_parameters
+from models.model_utils import create_model, make_data_parallel, get_num_parameters
 from utils.train_utils import create_optimizer, create_lr_scheduler, get_saved_state, save_checkpoint
 from utils.train_utils import reduce_tensor, to_python_float, get_tensorboard_log
 from utils.misc import AverageMeter, ProgressMeter
@@ -85,32 +85,39 @@ def main_worker(gpu_idx, configs):
     # model
     model = create_model(configs)
 
+    # load weight from a checkpoint
+    if configs.pretrained_path is not None:
+        assert os.path.isfile(configs.pretrained_path), "=> no checkpoint found at '{}'".format(configs.pretrained_path)
+        model.load_weights(weightfile=configs.pretrained_path)
+        if logger is not None:
+            logger.info('loaded pretrained model at {}'.format(configs.pretrained_path))
+
+    # resume weights of model from a checkpoint
+    if configs.resume_path is not None:
+        assert os.path.isfile(configs.resume_path), "=> no checkpoint found at '{}'".format(configs.resume_path)
+        model.load_weights(weightfile=configs.resume_path)
+        if logger is not None:
+            logger.info('resume training model from checkpoint {}'.format(configs.pretrained_path))
+
     # Data Parallel
     model = make_data_parallel(model, configs)
+
+    # Make sure to create optimizer after moving the model to cuda
+    optimizer = create_optimizer(configs, model)
+    lr_scheduler = create_lr_scheduler(optimizer, configs)
+
+    # resume optimizer, lr_scheduler from a checkpoint
+    if configs.resume_path is not None:
+        utils_path = configs.resume_path.replace('Model_', 'Utils_')
+        assert os.path.isfile(utils_path), "=> no checkpoint found at '{}'".format(utils_path)
+        utils_state_dict = torch.load(utils_path, map_location='cuda:{}'.format(configs.gpu_idx))
+        optimizer.load_state_dict(utils_state_dict['optimizer'])
+        lr_scheduler.load_state_dict(utils_state_dict['lr_scheduler'])
+        configs.start_epoch = utils_state_dict['epoch'] + 1
 
     if configs.is_master_node:
         num_parameters = get_num_parameters(model)
         logger.info('number of trained parameters of the model: {}'.format(num_parameters))
-
-    optimizer = create_optimizer(configs, model)
-    lr_scheduler = create_lr_scheduler(optimizer, configs)
-
-    # optionally load weight from a checkpoint
-    if configs.pretrained_path is not None:
-        model = load_pretrained_model(model, configs.pretrained_path, gpu_idx, configs.overwrite_global_2_local)
-        if logger is not None:
-            logger.info('loaded pretrained model at {}'.format(configs.pretrained_path))
-
-    # optionally resume from a checkpoint
-    if configs.resume_path is not None:
-        checkpoint = resume_model(configs.resume_path, configs.arch, configs.gpu_idx)
-        if hasattr(model, 'module'):
-            model.module.load_state_dict(checkpoint['state_dict'])
-        else:
-            model.load_state_dict(checkpoint['state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-        configs.start_epoch = checkpoint['epoch'] + 1
 
     if logger is not None:
         logger.info(">>> Loading dataset & getting dataloader...")

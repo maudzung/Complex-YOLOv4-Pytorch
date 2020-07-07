@@ -42,50 +42,6 @@ def get_num_parameters(model):
     return num_parameters
 
 
-def load_pretrained_model(model, pretrained_path, gpu_idx, overwrite_global_2_local):
-    """Load weights from the pretrained model"""
-    assert os.path.isfile(pretrained_path), "=> no checkpoint found at '{}'".format(pretrained_path)
-    if gpu_idx is None:
-        checkpoint = torch.load(pretrained_path, map_location='cpu')
-    else:
-        # Map model to be loaded to specified single gpu.
-        loc = 'cuda:{}'.format(gpu_idx)
-        checkpoint = torch.load(pretrained_path, map_location=loc)
-    pretrained_dict = checkpoint['state_dict']
-    if hasattr(model, 'module'):
-        model_state_dict = model.module.state_dict()
-        # 1. filter out unnecessary keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_state_dict}
-        # 2. overwrite entries in the existing state dict
-        model_state_dict.update(pretrained_dict)
-        # 3. load the new state dict
-        model.module.load_state_dict(model_state_dict)
-    else:
-        model_state_dict = model.state_dict()
-        # 1. filter out unnecessary keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_state_dict}
-        # 2. overwrite entries in the existing state dict
-        model_state_dict.update(pretrained_dict)
-        # 3. load the new state dict
-        model.load_state_dict(model_state_dict)
-    return model
-
-
-def resume_model(resume_path, arch, gpu_idx):
-    """Resume training model from the previous trained checkpoint"""
-    assert os.path.isfile(resume_path), "=> no checkpoint found at '{}'".format(resume_path)
-    if gpu_idx is None:
-        checkpoint = torch.load(resume_path, map_location='cpu')
-    else:
-        # Map model to be loaded to specified single gpu.
-        loc = 'cuda:{}'.format(gpu_idx)
-        checkpoint = torch.load(resume_path, map_location=loc)
-    assert arch == checkpoint['configs'].arch, "Load the different arch..."
-    print("=> loaded checkpoint '{}' (epoch {})".format(resume_path, checkpoint['epoch']))
-
-    return checkpoint
-
-
 def make_data_parallel(model, configs):
     if configs.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
