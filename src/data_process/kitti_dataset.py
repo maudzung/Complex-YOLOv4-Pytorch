@@ -63,6 +63,9 @@ class KittiDataset(Dataset):
         else:
             self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
 
+        if configs.num_samples is not None:
+            self.sample_id_list = self.sample_id_list[:configs.num_samples]
+
         print('Load {} samples from {}'.format(mode, self.dataset_dir))
         print('Done: total {} samples {}'.format(mode, len(self.sample_id_list)))
 

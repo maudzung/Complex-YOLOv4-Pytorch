@@ -199,6 +199,7 @@ def parse_configs():
 
     configs.BEV_WIDTH = 608  # across y axis -25m ~ 25m
     configs.BEV_HEIGHT = 608  # across x axis 0m ~ 50m
+    configs.img_size = configs.BEV_HEIGHT
 
     configs.DISCRETIZATION = (configs.boundary["maxX"] - configs.boundary["minX"]) / configs.BEV_HEIGHT
 

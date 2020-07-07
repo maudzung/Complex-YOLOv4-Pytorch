@@ -244,12 +244,11 @@ def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
         for batch_idx, batch_data in enumerate(tqdm(val_loader)):
             data_time.update(time.time() - start_time)
             _, imgs, targets = batch_data
-            batch_size = imgs.size(0)
-
             # Extract labels
             labels += targets[:, 1].tolist()
             # Rescale target
             targets[:, 2:] *= configs.img_size
+            imgs = imgs.to(configs.device, non_blocking=True)
 
             outputs = model(imgs)
             outputs = non_max_suppression_rotated_bbox(outputs, conf_thres=conf_thres, nms_thres=nms_thres)

@@ -291,7 +291,7 @@ def non_max_suppression_rotated_bbox(prediction, conf_thres=0.95, nms_thres=0.4)
     """
 
     output = [None for _ in range(len(prediction))]
-    for image_i, image_pred in enumerate(prediction):
+    for image_idx, image_pred in enumerate(prediction):
         # Filter out confidence scores below threshold
         image_pred = image_pred[image_pred[:, 6] >= conf_thres]
         # If none are remaining => process next image
@@ -319,7 +319,7 @@ def non_max_suppression_rotated_bbox(prediction, conf_thres=0.95, nms_thres=0.4)
             keep_boxes += [detections[0]]
             detections = detections[~invalid]
         if keep_boxes:
-            output[image_i] = torch.stack(keep_boxes)
+            output[image_idx] = torch.stack(keep_boxes)
 
     return output
 
