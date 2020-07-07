@@ -92,3 +92,19 @@ def to_python_float(t):
         return t.item()
     else:
         return t[0]
+
+
+def get_tensorboard_log(model):
+    tensorboard_log = {}
+    if hasattr(model, 'module'):
+        yolo_layers = model.module.yolo_layers
+    else:
+        yolo_layers = model.yolo_layers
+    for j, yolo_layer in enumerate(yolo_layers):
+        for name, metric in yolo_layer.metrics.items():
+            if j == 0:
+                tensorboard_log['{}'.format(name)] = metric
+            else:
+                tensorboard_log['{}'.format(name)] += metric
+
+    return tensorboard_log

@@ -19,7 +19,7 @@ sys.path.append('./')
 from data_process.kitti_dataloader import create_train_val_dataloader
 from models.model_utils import create_model, load_pretrained_model, make_data_parallel, resume_model, get_num_parameters
 from train_utils import create_optimizer, create_lr_scheduler, get_saved_state, save_checkpoint
-from train_utils import reduce_tensor, to_python_float
+from train_utils import reduce_tensor, to_python_float, get_tensorboard_log
 from utils.misc import AverageMeter, ProgressMeter
 from utils.logger import Logger
 from config.config import parse_configs
@@ -213,14 +213,7 @@ def train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs
         if tb_writer is not None:
             if (global_step % configs.print_freq) == 0:
                 # Tensorboard
-                tensorboard_log = {}
-                for j, yolo_layer in enumerate(model.yolo_layers):
-                    for name, metric in yolo_layer.metrics.items():
-                        if j == 0:
-                            tensorboard_log['{}'.format(name)] = metric
-                        else:
-                            tensorboard_log['{}'.format(name)] += metric
-
+                tensorboard_log = get_tensorboard_log(model)
                 tensorboard_log['avg_loss'] = losses.avg
                 tb_writer.add_scalars('Train', tensorboard_log, global_step)
 
