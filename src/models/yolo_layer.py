@@ -121,7 +121,8 @@ class YoloLayer(nn.Module):
         iou_scores[b, best_n, gj, gi] = rotated_iou_scores.cuda()
 
         tconf = obj_mask.float()
-        return iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf
+        return iou_scores, class_mask, obj_mask.type(torch.bool), noobj_mask.type(
+            torch.bool), tx, ty, tw, th, tim, tre, tcls, tconf
 
     def forward(self, x, targets=None, img_size=608):
 

@@ -5,6 +5,8 @@ import random
 import os
 import warnings
 
+warnings.filterwarnings("ignore", category=UserWarning)
+
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.distributed as dist
@@ -36,8 +38,7 @@ def main():
         torch.backends.cudnn.benchmark = False
 
     if configs.gpu_idx is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
+        print('You have chosen a specific GPU. This will completely disable data parallelism.')
 
     if configs.dist_url == "env://" and configs.world_size == -1:
         configs.world_size = int(os.environ["WORLD_SIZE"])

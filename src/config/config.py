@@ -50,7 +50,7 @@ def parse_configs():
                         help='Take a subset of the dataset to run and debug')
     parser.add_argument('--num_workers', type=int, default=8,
                         help='Number of threads for loading data')
-    parser.add_argument('--batch_size', type=int, default=16,
+    parser.add_argument('--batch_size', type=int, default=4,
                         help='mini-batch size (default: 64), this is the total'
                              'batch size of all GPUs on the current node when using'
                              'Data Parallel or Distributed Data Parallel')
