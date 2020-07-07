@@ -152,7 +152,7 @@ class Darknet(nn.Module):
         self.height = int(self.blocks[0]['height'])
 
         self.models = self.create_network(self.blocks)  # merge conv, bn,leaky
-        # self.yolo_layers = [layer[0] for layer in self.models if hasattr(layer[0], "metrics")]
+        self.yolo_layers = [layer for layer in self.models if hasattr(layer, "metrics")]
 
         self.loss = self.models[len(self.models) - 1]
 

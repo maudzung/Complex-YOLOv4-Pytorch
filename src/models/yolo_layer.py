@@ -39,6 +39,7 @@ class YoloLayer(nn.Module):
         self.bce_loss = nn.BCELoss()
         self.grid_size = 0
         self.img_size = img_size
+        self.metrics = {}
 
     def compute_grid_offsets(self, grid_size, cuda=True):
         self.grid_size = grid_size
