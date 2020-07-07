@@ -55,8 +55,7 @@ def make_data_parallel(model, configs):
             # ourselves based on the total number of GPUs we have
             configs.batch_size = int(configs.batch_size / configs.ngpus_per_node)
             configs.num_workers = int((configs.num_workers + configs.ngpus_per_node - 1) / configs.ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[configs.gpu_idx],
-                                                              find_unused_parameters=True)
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[configs.gpu_idx])
         else:
             model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all

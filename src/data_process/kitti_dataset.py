@@ -18,6 +18,7 @@ import cv2
 sys.path.append('../')
 
 from data_process import transformation, kitti_bev_utils, kitti_data_utils
+import config.kitti_config as cnf
 
 
 def resize(image, size):
@@ -26,13 +27,12 @@ def resize(image, size):
 
 
 class KittiDataset(Dataset):
-    def __init__(self, configs, split='train', mode='TRAIN', data_aug=True, multiscale=False):
-        self.configs = configs
-        self.dataset_dir = configs.dataset_dir
+    def __init__(self, dataset_dir, split='train', mode='TRAIN', data_aug=True, multiscale=False, num_samples=None):
+        self.dataset_dir = dataset_dir
         self.split = split
         self.multiscale = multiscale
         self.data_aug = data_aug
-        self.img_size = configs.BEV_WIDTH
+        self.img_size = cnf.BEV_WIDTH
         self.max_objects = 100
         self.min_size = self.img_size - 3 * 32
         self.max_size = self.img_size + 3 * 32
@@ -63,11 +63,8 @@ class KittiDataset(Dataset):
         else:
             self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
 
-        if configs.num_samples is not None:
-            self.sample_id_list = self.sample_id_list[:configs.num_samples]
-
-        print('Load {} samples from {}'.format(mode, self.dataset_dir))
-        print('Done: total {} samples {}'.format(mode, len(self.sample_id_list)))
+        if num_samples is not None:
+            self.sample_id_list = self.sample_id_list[:num_samples]
 
     def __getitem__(self, index):
         sample_id = int(self.sample_id_list[index])
@@ -86,8 +83,8 @@ class KittiDataset(Dataset):
             if self.data_aug and self.mode == 'train':
                 lidarData, labels[:, 1:] = transformation.complex_yolo_pc_augmentation(lidarData, labels[:, 1:], True)
 
-            b = kitti_bev_utils.removePoints(lidarData, self.configs.boundary)
-            rgb_map = kitti_bev_utils.makeBVFeature(b, self.configs.DISCRETIZATION, self.configs.boundary)
+            b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
+            rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
             target = kitti_bev_utils.build_yolo_target(labels)
             img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
@@ -111,8 +108,8 @@ class KittiDataset(Dataset):
 
         else:
             lidarData = self.get_lidar(sample_id)
-            b = kitti_bev_utils.removePoints(lidarData, self.configs.boundary)
-            rgb_map = kitti_bev_utils.makeBVFeature(b, self.configs.DISCRETIZATION, self.configs.boundary)
+            b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
+            rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
             img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
             return img_file, rgb_map
 
@@ -135,7 +132,7 @@ class KittiDataset(Dataset):
 
             valid_list = []
             for i in range(labels.shape[0]):
-                if int(labels[i, 0]) in self.configs.CLASS_NAME_TO_ID.values():
+                if int(labels[i, 0]) in cnf.CLASS_NAME_TO_ID.values():
                     if self.check_point_cloud_range(labels[i, 1:4]):
                         valid_list.append(labels[i, 0])
 
@@ -147,9 +144,9 @@ class KittiDataset(Dataset):
         :param xyz: [x, y, z]
         :return:
         """
-        x_range = [self.configs.boundary["minX"], self.configs.boundary["maxX"]]
-        y_range = [self.configs.boundary["minY"], self.configs.boundary["maxY"]]
-        z_range = [self.configs.boundary["minZ"], self.configs.boundary["maxZ"]]
+        x_range = [cnf.boundary["minX"], cnf.boundary["maxX"]]
+        y_range = [cnf.boundary["minY"], cnf.boundary["maxY"]]
+        z_range = [cnf.boundary["minZ"], cnf.boundary["maxZ"]]
 
         if (x_range[0] <= xyz[0] <= x_range[1]) and (y_range[0] <= xyz[1] <= y_range[1]) and \
                 (z_range[0] <= xyz[2] <= z_range[1]):

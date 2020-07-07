@@ -20,9 +20,8 @@ from data_process.kitti_dataset import KittiDataset
 
 def create_train_val_dataloader(configs):
     """Create dataloader for training and validate"""
-
-    train_dataset = KittiDataset(configs, split='train', mode='train', data_aug=True,
-                                 multiscale=configs.multiscale_training)
+    train_dataset = KittiDataset(configs.dataset_dir, split='train', mode='train', data_aug=True,
+                                 multiscale=configs.multiscale_training, num_samples=configs.num_samples)
     train_sampler = None
     if configs.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -31,7 +30,8 @@ def create_train_val_dataloader(configs):
                                   collate_fn=train_dataset.collate_fn)
 
     val_sampler = None
-    val_dataset = KittiDataset(configs, split='val', mode='val', data_aug=False, multiscale=False)
+    val_dataset = KittiDataset(configs.dataset_dir, split='val', mode='val', data_aug=False, multiscale=False,
+                               num_samples=configs.num_samples)
     if configs.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
     val_dataloader = DataLoader(val_dataset, batch_size=configs.batch_size, shuffle=False,
@@ -44,7 +44,8 @@ def create_train_val_dataloader(configs):
 def create_test_dataloader(configs):
     """Create dataloader for testing phase"""
 
-    test_dataset = KittiDataset(configs, split='test', mode='test', data_aug=False, multiscale=False)
+    test_dataset = KittiDataset(configs.dataset_dir, split='test', mode='test', data_aug=False,
+                                multiscale=False, num_samples=configs.num_samples)
     test_sampler = None
     if configs.distributed:
         test_sampler = torch.utils.data.distributed.DistributedSampler(test_dataset)
