@@ -56,9 +56,11 @@ def parse_configs():
                              'Data Parallel or Distributed Data Parallel')
     parser.add_argument('--subdivisions', type=int, default=16,
                         help='subdivisions during training')
-    parser.add_argument('--print_freq', type=int, default=10, metavar='N',
+    parser.add_argument('--print_freq', type=int, default=20, metavar='N',
                         help='print frequency (default: 10)')
-    parser.add_argument('--checkpoint_freq', type=int, default=3, metavar='N',
+    parser.add_argument('--tensorboard_freq', type=int, default=20, metavar='N',
+                        help='frequency of saving tensorboard (default: 10)')
+    parser.add_argument('--checkpoint_freq', type=int, default=5, metavar='N',
                         help='frequency of saving checkpoints (default: 3)')
     ####################################################################
     ##############     Training strategy            ###################

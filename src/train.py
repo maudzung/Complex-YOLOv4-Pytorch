@@ -208,8 +208,7 @@ def train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs
         batch_time.update(time.time() - start_time)
 
         if tb_writer is not None:
-            if (global_step % configs.print_freq) == 0:
-                # Tensorboard
+            if (global_step % configs.tensorboard_freq) == 0:
                 tensorboard_log = get_tensorboard_log(model)
                 tensorboard_log['lr'] = lr_scheduler.get_lr()[0] * configs.batch_size * configs.subdivisions
                 tensorboard_log['avg_loss'] = losses.avg
