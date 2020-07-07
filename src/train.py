@@ -14,13 +14,14 @@ from tqdm import tqdm
 
 sys.path.append('./')
 
-from data_process.kitti_dataloader import create_train_val_dataloader, create_test_dataloader
+from data_process.kitti_dataloader import create_train_val_dataloader
 from models.model_utils import create_model, load_pretrained_model, make_data_parallel, resume_model, get_num_parameters
 from train_utils import create_optimizer, create_lr_scheduler, get_saved_state, save_checkpoint
 from train_utils import reduce_tensor, to_python_float
 from utils.misc import AverageMeter, ProgressMeter
 from utils.logger import Logger
 from config.config import parse_configs
+from utils.evaluation_utils import non_max_suppression_rotated_bbox, get_batch_statistics_rotated_bbox, ap_per_class
 
 
 def main():
@@ -92,9 +93,6 @@ def main_worker(gpu_idx, configs):
 
     optimizer = create_optimizer(configs, model)
     lr_scheduler = create_lr_scheduler(optimizer, configs)
-    best_val_loss = np.inf
-    earlystop_count = 0
-    is_best = False
 
     # optionally load weight from a checkpoint
     if configs.pretrained_path is not None:
@@ -111,25 +109,23 @@ def main_worker(gpu_idx, configs):
             model.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-        best_val_loss = checkpoint['best_val_loss']
-        earlystop_count = checkpoint['earlystop_count']
         configs.start_epoch = checkpoint['epoch'] + 1
 
     if logger is not None:
         logger.info(">>> Loading dataset & getting dataloader...")
     # Create dataloader
     train_loader, val_loader, train_sampler = create_train_val_dataloader(configs)
-    test_loader = create_test_dataloader(configs)
     if logger is not None:
         logger.info('number of batches in train set: {}'.format(len(train_loader)))
         if val_loader is not None:
             logger.info('number of batches in val set: {}'.format(len(val_loader)))
-        logger.info('number of batches in test set: {}'.format(len(test_loader)))
 
     if configs.evaluate:
         assert val_loader is not None, "The validation should not be None"
-        val_loss = evaluate_one_epoch(val_loader, model, configs.start_epoch - 1, configs, logger)
-        print('Evaluate, val_loss: {}'.format(val_loss))
+        eval_metrics = evaluate_one_epoch(val_loader, model, configs.start_epoch - 1, configs, logger)
+        precision, recall, AP, f1, ap_class = eval_metrics
+        print('Evaluate - precision: {}, recall: {}, AP: {}, f1: {}, ap_class: {}'.format(precision, recall, AP, f1,
+                                                                                          ap_class))
         return
 
     for epoch in range(configs.start_epoch, configs.num_epochs + 1):
@@ -145,42 +141,20 @@ def main_worker(gpu_idx, configs):
         if configs.distributed:
             train_sampler.set_epoch(epoch)
         # train for one epoch
-        train_loss = train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_writer)
-        loss_dict = {'train': train_loss}
+        train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_writer)
         if not configs.no_val:
-            val_loss = evaluate_one_epoch(val_loader, model, epoch, configs, logger, tb_writer)
-            is_best = val_loss <= best_val_loss
-            best_val_loss = min(val_loss, best_val_loss)
-            loss_dict['val'] = val_loss
+            precision, recall, AP, f1, ap_class = evaluate_one_epoch(val_loader, model, epoch, configs, logger)
+            val_metrics_dict = {'precision': precision, 'recall': recall, 'AP': AP, 'f1': f1, 'ap_class': ap_class}
+            if tb_writer is not None:
+                tb_writer.add_scalars('Validation', val_metrics_dict, epoch)
 
-        if not configs.no_test:
-            test_loss = evaluate_one_epoch(test_loader, model, epoch, configs, logger, tb_writer)
-            loss_dict['test'] = test_loss
-        # Write tensorboard
-        if tb_writer is not None:
-            tb_writer.add_scalars('Loss', loss_dict, epoch)
         # Save checkpoint
-        if configs.is_master_node and (is_best or ((epoch % configs.checkpoint_freq) == 0)):
-            saved_state = get_saved_state(model, optimizer, lr_scheduler, epoch, configs, best_val_loss,
-                                          earlystop_count)
-            save_checkpoint(configs.checkpoints_dir, configs.saved_fn, saved_state, is_best, epoch)
-        # Check early stop training
-        if configs.earlystop_patience is not None:
-            earlystop_count = 0 if is_best else (earlystop_count + 1)
-            print_string = ' |||\t earlystop_count: {}'.format(earlystop_count)
-            if configs.earlystop_patience <= earlystop_count:
-                print_string += '\n\t--- Early stopping!!!'
-                break
-            else:
-                print_string += '\n\t--- Continue training..., earlystop_count: {}'.format(earlystop_count)
-            if logger is not None:
-                logger.info(print_string)
+        if configs.is_master_node and ((epoch % configs.checkpoint_freq) == 0):
+            saved_state = get_saved_state(model, optimizer, lr_scheduler, epoch, configs)
+            save_checkpoint(configs.checkpoints_dir, configs.saved_fn, saved_state, epoch)
+
         # Adjust learning rate
-        if configs.lr_type == 'plateau':
-            assert (not configs.no_val), "Only use plateau when having validation set"
-            lr_scheduler.step(val_loss)
-        else:
-            lr_scheduler.step()
+        lr_scheduler.step()
 
     if tb_writer is not None:
         tb_writer.close()
@@ -237,12 +211,14 @@ def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_w
 
         # Tensorboard
         tensorboard_log = {}
-        for j, yolo in enumerate(model.yolo_layers):
-            for name, metric in yolo.metrics.items():
+        for j, yolo_layer in enumerate(model.yolo_layers):
+            for name, metric in yolo_layer.metrics.items():
                 if j == 0:
                     tensorboard_log['{}'.format(name)] = metric
                 else:
                     tensorboard_log['{}'.format(name)] += metric
+
+        tensorboard_log['avg_loss'] = losses.avg
 
         if tb_writer is not None:
             tb_writer.add_scalars('Train', tensorboard_log, global_step)
@@ -254,16 +230,20 @@ def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_w
 
         start_time = time.time()
 
-    return losses.avg
-
 
 def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
 
+    conf_thres = 0.5
+    nms_thres = 0.5
+    iou_threshold = 0.5
+
     progress = ProgressMeter(len(val_loader), [batch_time, data_time, losses],
                              prefix="Evaluate - Epoch: [{}/{}]".format(epoch, configs.num_epochs))
+    labels = []
+    sample_metrics = []  # List of tuples (TP, confs, pred)
     # switch to evaluate mode
     model.eval()
     with torch.no_grad():
@@ -271,11 +251,17 @@ def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
         for batch_idx, batch_data in enumerate(tqdm(val_loader)):
             data_time.update(time.time() - start_time)
             _, imgs, targets = batch_data
-            batch_size = resized_imgs.size(0)
-            target_seg = target_seg.to(configs.device, non_blocking=True)
-            resized_imgs = resized_imgs.to(configs.device, non_blocking=True).float()
-            pred_ball_global, pred_ball_local, pred_events, pred_seg, local_ball_pos_xy, total_loss, _ = model.inference(
-                resized_imgs, org_ball_pos_xy, global_ball_pos_xy, target_events, target_seg)
+            batch_size = imgs.size(0)
+
+            # Extract labels
+            labels += targets[:, 1].tolist()
+            # Rescale target
+            targets[:, 2:] *= configs.img_size
+
+            outputs = model(imgs)
+            outputs = non_max_suppression_rotated_bbox(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+
+            sample_metrics += get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold=iou_threshold)
 
             # For torch.nn.DataParallel case
             if (not configs.distributed) and (configs.gpu_idx is None):
@@ -297,7 +283,11 @@ def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
 
             start_time = time.time()
 
-    return losses.avg
+        # Concatenate sample statistics
+        true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
+        precision, recall, AP, f1, ap_class = ap_per_class(true_positives, pred_scores, pred_labels, labels)
+
+    return precision, recall, AP, f1, ap_class
 
 
 if __name__ == '__main__':

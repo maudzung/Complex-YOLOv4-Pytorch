@@ -54,7 +54,7 @@ def create_lr_scheduler(optimizer, configs):
     return lr_scheduler
 
 
-def get_saved_state(model, optimizer, lr_scheduler, epoch, configs, best_val_loss, earlystop_count):
+def get_saved_state(model, optimizer, lr_scheduler, epoch, configs):
     """Get the information to save with checkpoints"""
     if hasattr(model, 'module'):
         model_state_dict = model.module.state_dict()
@@ -66,19 +66,14 @@ def get_saved_state(model, optimizer, lr_scheduler, epoch, configs, best_val_los
         'optimizer': copy.deepcopy(optimizer.state_dict()),
         'lr_scheduler': lr_scheduler.state_dict(),
         'state_dict': model_state_dict,
-        'best_val_loss': best_val_loss,
-        'earlystop_count': earlystop_count,
     }
 
     return saved_state
 
 
-def save_checkpoint(checkpoints_dir, saved_fn, saved_state, is_best, epoch):
+def save_checkpoint(checkpoints_dir, saved_fn, saved_state, epoch):
     """Save checkpoint every epoch only is best model or after every checkpoint_freq epoch"""
-    if is_best:
-        save_path = os.path.join(checkpoints_dir, '{}_best.pth'.format(saved_fn))
-    else:
-        save_path = os.path.join(checkpoints_dir, '{}_epoch_{}.pth'.format(saved_fn, epoch))
+    save_path = os.path.join(checkpoints_dir, '{}_epoch_{}.pth'.format(saved_fn, epoch))
 
     torch.save(saved_state, save_path)
     print('save a checkpoint at {}'.format(save_path))
