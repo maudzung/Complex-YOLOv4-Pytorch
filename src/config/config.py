@@ -36,102 +36,58 @@ def parse_configs():
                         help='The path for cfgfile (only for darknet)')
     parser.add_argument('--dropout_p', type=float, default=0.5, metavar='P',
                         help='The dropout probability of the model')
-    parser.add_argument('--multitask_learning', action='store_true',
-                        help='If true, the weights of different losses will be learnt (train).'
-                             'If false, a regular sum of different losses will be applied')
-    parser.add_argument('--no_ball', action='store_true',
-                        help='If true, no local stage for ball detection.')
-    parser.add_argument('--no_event', action='store_true',
-                        help='If true, no event spotting detection.')
-    parser.add_argument('--no_seg', action='store_true',
-                        help='If true, no segmentation module.')
     parser.add_argument('--pretrained_path', type=str, default=None, metavar='PATH',
                         help='the path of the pretrained checkpoint')
-    parser.add_argument('--overwrite_global_2_local', action='store_true',
-                        help='If true, the weights of the local stage will be overwritten by the global stage.')
 
     ####################################################################
     ##############     Dataloader and Running configs            #######
     ####################################################################
     parser.add_argument('--multiscale_training', action='store_true',
                         help='If true, use scaling data for training')
-    parser.add_argument('--no-test', action='store_true',
-                        help='If true, dont evaluate the model on the test set')
-    parser.add_argument('--val-size', type=float, default=0.2,
-                        help='The size of validation set')
-    parser.add_argument('--smooth-labelling', action='store_true',
-                        help='If true, smoothly make the labels of event spotting')
+    parser.add_argument('--no-val', action='store_true',
+                        help='If true, dont evaluate the model on the val set')
     parser.add_argument('--num_samples', type=int, default=None,
                         help='Take a subset of the dataset to run and debug')
     parser.add_argument('--num_workers', type=int, default=8,
                         help='Number of threads for loading data')
-    parser.add_argument('--batch_size', type=int, default=32,
-                        help='mini-batch size (default: 16), this is the total'
+    parser.add_argument('--batch_size', type=int, default=16,
+                        help='mini-batch size (default: 64), this is the total'
                              'batch size of all GPUs on the current node when using'
                              'Data Parallel or Distributed Data Parallel')
+    parser.add_argument('--subdivisions', type=int, default=16,
+                        help='subdivisions during training')
     parser.add_argument('--print_freq', type=int, default=10, metavar='N',
                         help='print frequency (default: 10)')
     parser.add_argument('--checkpoint_freq', type=int, default=3, metavar='N',
                         help='frequency of saving checkpoints (default: 3)')
-    parser.add_argument('--sigma', type=float, default=0.5, metavar='SIGMA',
-                        help='standard deviation of the 1D Gaussian for the ball position target')
-    parser.add_argument('--thresh_ball_pos_mask', type=float, default=0.01, metavar='THRESH',
-                        help='the lower thresh for the 1D Gaussian of the ball position target')
     ####################################################################
     ##############     Training strategy            ###################
     ####################################################################
 
     parser.add_argument('--start_epoch', type=int, default=1, metavar='N',
                         help='the starting epoch')
-    parser.add_argument('--num_epochs', type=int, default=40, metavar='N',
+    parser.add_argument('--num_epochs', type=int, default=300, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--lr', type=float, default=1e-3, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.00261, metavar='LR',
                         help='initial learning rate')
     parser.add_argument('--minimum_lr', type=float, default=1e-7, metavar='MIN_LR',
                         help='minimum learning rate during training')
-    parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
+    parser.add_argument('--momentum', type=float, default=0.949, metavar='M',
                         help='momentum')
-    parser.add_argument('-wd', '--weight_decay', type=float, default=1e-6, metavar='WD',
+    parser.add_argument('-wd', '--weight_decay', type=float, default=5e-4, metavar='WD',
                         help='weight decay (default: 1e-6)')
     parser.add_argument('--optimizer_type', type=str, default='adam', metavar='OPTIMIZER',
                         help='the type of optimizer, it can be sgd or adam')
     parser.add_argument('--lr_type', type=str, default='plateau', metavar='SCHEDULER',
                         help='the type of the learning rate scheduler (steplr or ReduceonPlateau)')
-    parser.add_argument('--lr_factor', type=float, default=0.5, metavar='FACTOR',
-                        help='reduce the learning rate with this factor')
-    parser.add_argument('--lr_step_size', type=int, default=5, metavar='STEP_SIZE',
-                        help='step_size of the learning rate when using steplr scheduler')
-    parser.add_argument('--lr_patience', type=int, default=3, metavar='N',
-                        help='patience of the learning rate when using ReduceoPlateau scheduler')
-    parser.add_argument('--earlystop_patience', type=int, default=None, metavar='N',
-                        help='Early stopping the training process if performance is not improved within this value')
-    parser.add_argument('--freeze_ball', action='store_true',
-                        help='If true, no update/train weights for the global stage of ball detection.')
-    parser.add_argument('--freeze_event', action='store_true',
-                        help='If true, no update/train weights for the event module.')
-    parser.add_argument('--freeze_seg', action='store_true',
-                        help='If true, no update/train weights for the segmentation module.')
-    # For warmup phase
-    parser.add_argument('--warmup_epochs', type=int, default=0, metavar='N',
-                        help='number of epochs in the warmup phase ')
-    parser.add_argument('--warmup_lr_factor', type=float, default=1.0 / 3, metavar='FACTOR',
-                        help='factor for the learning rate in the warmup phase ')
-    parser.add_argument('--warmup_lr_method', type=str, default='linear', metavar='METHOD',
-                        help='method for the learning rate in the warmup phase ')
-    parser.add_argument('--lr_power', type=float, default=0.9, metavar='POWER',
-                        help='power for the learning rate (poly)')
+    parser.add_argument('--burn_in', type=int, default=1000, metavar='N',
+                        help='number of burn in step')
+    parser.add_argument('--steps', nargs='*', default=[400000, 450000],
+                        help='number of burn in step')
 
     ####################################################################
     ##############     Loss weight            ###################
     ####################################################################
-    parser.add_argument('--bce_weight', type=float, default=0.5,
-                        help='The weight of BCE loss in segmentation module, the dice_loss weight = 1- bce_weight')
-    parser.add_argument('--ball_weight', type=float, default=1.,
-                        help='The weight of loss of the global stage for ball detection')
-    parser.add_argument('--event_weight', type=float, default=1.,
-                        help='The weight of loss of the event spotting module')
-    parser.add_argument('--seg_weight', type=float, default=1.,
-                        help='The weight of BCE loss in segmentation module')
 
     ####################################################################
     ##############     Distributed Data Parallel            ############
@@ -160,12 +116,6 @@ def parse_configs():
                         help='only evaluate the model, not training')
     parser.add_argument('--resume_path', type=str, default=None, metavar='PATH',
                         help='the path of the resumed checkpoint')
-    parser.add_argument('--use_best_checkpoint', action='store_true',
-                        help='If true, choose the best model on val set, otherwise choose the last model')
-    parser.add_argument('--seg_thresh', type=float, default=0.5,
-                        help='threshold of the segmentation output')
-    parser.add_argument('--event_thresh', type=float, default=0.5,
-                        help='threshold of the event spotting output')
     parser.add_argument('--save_test_output', action='store_true',
                         help='If true, the image of testing phase will be saved')
 
@@ -194,7 +144,7 @@ def parse_configs():
     ####################################################################
     ##############     Data configs            ###################
     ####################################################################
-    configs.working_dir = '../../'
+    configs.working_dir = '../'
     configs.dataset_dir = os.path.join(configs.working_dir, 'dataset', 'kitti')
 
     ####################################################################
@@ -202,12 +152,6 @@ def parse_configs():
     ####################################################################
     configs.checkpoints_dir = os.path.join(configs.working_dir, 'checkpoints', configs.saved_fn)
     configs.logs_dir = os.path.join(configs.working_dir, 'logs', configs.saved_fn)
-    configs.use_best_checkpoint = True
-
-    if configs.use_best_checkpoint:
-        configs.saved_weight_name = os.path.join(configs.checkpoints_dir, '{}_best.pth'.format(configs.saved_fn))
-    else:
-        configs.saved_weight_name = os.path.join(configs.checkpoints_dir, '{}.pth'.format(configs.saved_fn))
 
     configs.results_dir = os.path.join(configs.working_dir, 'results')
 

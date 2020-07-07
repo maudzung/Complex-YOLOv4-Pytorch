@@ -12,7 +12,7 @@ import torch.nn as nn
 sys.path.append('../')
 
 from utils.torch_utils import to_cpu
-from utils.losses_utils import rotated_box_11_iou_polygon, rotated_box_wh_iou_polygon
+from utils.evaluation_utils import rotated_box_11_iou_polygon, rotated_box_wh_iou_polygon
 
 
 class YoloLayer(nn.Module):

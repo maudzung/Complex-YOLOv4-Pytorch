@@ -141,7 +141,7 @@ def main_worker(gpu_idx, configs):
         if configs.distributed:
             train_sampler.set_epoch(epoch)
         # train for one epoch
-        train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_writer)
+        train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer)
         if not configs.no_val:
             precision, recall, AP, f1, ap_class = evaluate_one_epoch(val_loader, model, epoch, configs, logger)
             val_metrics_dict = {'precision': precision, 'recall': recall, 'AP': AP, 'f1': f1, 'ap_class': ap_class}
@@ -153,9 +153,6 @@ def main_worker(gpu_idx, configs):
             saved_state = get_saved_state(model, optimizer, lr_scheduler, epoch, configs)
             save_checkpoint(configs.checkpoints_dir, configs.saved_fn, saved_state, epoch)
 
-        # Adjust learning rate
-        lr_scheduler.step()
-
     if tb_writer is not None:
         tb_writer.close()
     if configs.distributed:
@@ -166,7 +163,7 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_writer):
+def train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -194,11 +191,14 @@ def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_w
         if (not configs.distributed) and (configs.gpu_idx is None):
             total_loss = torch.mean(total_loss)
 
-        # zero the parameter gradients
-        optimizer.zero_grad()
         # compute gradient and perform backpropagation
         total_loss.backward()
-        optimizer.step()
+        if global_step % configs.subdivisions == 0:
+            optimizer.step()
+            # Adjust learning rate
+            lr_scheduler.step()
+            # zero the parameter gradients
+            optimizer.zero_grad()
 
         if configs.distributed:
             reduced_loss = reduce_tensor(total_loss.data, configs.world_size)
@@ -206,26 +206,26 @@ def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_w
             reduced_loss = total_loss.data
         losses.update(to_python_float(reduced_loss), batch_size)
         # measure elapsed time
-        torch.cuda.synchronize()
+        # torch.cuda.synchronize()
         batch_time.update(time.time() - start_time)
 
-        # Tensorboard
-        tensorboard_log = {}
-        for j, yolo_layer in enumerate(model.yolo_layers):
-            for name, metric in yolo_layer.metrics.items():
-                if j == 0:
-                    tensorboard_log['{}'.format(name)] = metric
-                else:
-                    tensorboard_log['{}'.format(name)] += metric
-
-        tensorboard_log['avg_loss'] = losses.avg
-
         if tb_writer is not None:
-            tb_writer.add_scalars('Train', tensorboard_log, global_step)
+            if (global_step % configs.print_freq) == 0:
+                # Tensorboard
+                tensorboard_log = {}
+                for j, yolo_layer in enumerate(model.yolo_layers):
+                    for name, metric in yolo_layer.metrics.items():
+                        if j == 0:
+                            tensorboard_log['{}'.format(name)] = metric
+                        else:
+                            tensorboard_log['{}'.format(name)] += metric
+
+                tensorboard_log['avg_loss'] = losses.avg
+                tb_writer.add_scalars('Train', tensorboard_log, global_step)
 
         # Log message
         if logger is not None:
-            if ((batch_idx + 1) % configs.print_freq) == 0:
+            if (global_step % configs.print_freq) == 0:
                 logger.info(progress.get_message(batch_idx))
 
         start_time = time.time()
@@ -234,13 +234,12 @@ def train_one_epoch(train_loader, model, optimizer, epoch, configs, logger, tb_w
 def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
 
     conf_thres = 0.5
     nms_thres = 0.5
     iou_threshold = 0.5
 
-    progress = ProgressMeter(len(val_loader), [batch_time, data_time, losses],
+    progress = ProgressMeter(len(val_loader), [batch_time, data_time],
                              prefix="Evaluate - Epoch: [{}/{}]".format(epoch, configs.num_epochs))
     labels = []
     sample_metrics = []  # List of tuples (TP, confs, pred)
@@ -263,17 +262,8 @@ def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
 
             sample_metrics += get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold=iou_threshold)
 
-            # For torch.nn.DataParallel case
-            if (not configs.distributed) and (configs.gpu_idx is None):
-                total_loss = torch.mean(total_loss)
-
-            if configs.distributed:
-                reduced_loss = reduce_tensor(total_loss.data, configs.world_size)
-            else:
-                reduced_loss = total_loss.data
-            losses.update(to_python_float(reduced_loss), batch_size)
             # measure elapsed time
-            torch.cuda.synchronize()
+            # torch.cuda.synchronize()
             batch_time.update(time.time() - start_time)
 
             # Log message
@@ -295,6 +285,7 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         try:
+            cleanup()
             sys.exit(0)
         except SystemExit:
             os._exit(0)
