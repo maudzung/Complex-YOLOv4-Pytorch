@@ -5,6 +5,7 @@
 """
 
 import sys
+import math
 
 import torch
 import torch.nn as nn
@@ -16,6 +17,7 @@ sys.path.append('../')
 from models.region_loss import RegionLoss
 from models.yolo_layer import YoloLayer
 from models.darknet_utils import parse_cfg, print_cfg, load_fc, load_conv_bn, load_conv
+from utils.torch_utils import to_cpu
 
 
 class Mish(nn.Module):
@@ -150,7 +152,7 @@ class Darknet(nn.Module):
         self.height = int(self.blocks[0]['height'])
 
         self.models = self.create_network(self.blocks)  # merge conv, bn,leaky
-        self.yolo_layers = [layer[0] for layer in self.models if hasattr(layer[0], "metrics")]
+        # self.yolo_layers = [layer[0] for layer in self.models if hasattr(layer[0], "metrics")]
 
         self.loss = self.models[len(self.models) - 1]
 
@@ -164,6 +166,8 @@ class Darknet(nn.Module):
         self.seen = 0
 
     def forward(self, x, targets=None):
+        # batch_size, c, h, w
+        img_size = x.size(2)
         ind = -2
         self.loss = None
         outputs = dict()
@@ -227,7 +231,7 @@ class Darknet(nn.Module):
                     self.loss = self.models[ind](x)
                 outputs[ind] = None
             elif block['type'] == 'yolo':
-                x, layer_loss = self.models[ind](x, targets)
+                x, layer_loss = self.models[ind](x, targets, img_size)
                 loss += layer_loss
                 yolo_outputs.append(x)
             elif block['type'] == 'cost':
@@ -236,7 +240,7 @@ class Darknet(nn.Module):
                 print('unknown type %s' % (block['type']))
         yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
 
-        return loss, yolo_outputs
+        return yolo_outputs if targets is None else (loss, yolo_outputs)
 
     def inference(self, x):
         ind = -2
@@ -478,18 +482,20 @@ class Darknet(nn.Module):
                 out_strides.append(prev_stride)
                 models.append(loss)
             elif block['type'] == 'yolo':
-                yolo_layer = YoloLayer()
-                anchors = block['anchors'].split(',')
-                anchor_mask = block['mask'].split(',')
-                yolo_layer.anchor_mask = [int(i) for i in anchor_mask]
-                yolo_layer.anchors = [float(i) for i in anchors]
-                yolo_layer.num_classes = int(block['classes'])
-                self.num_classes = yolo_layer.num_classes
-                yolo_layer.num_anchors = int(block['num'])
-                yolo_layer.anchor_step = len(yolo_layer.anchors) // yolo_layer.num_anchors
-                yolo_layer.stride = prev_stride
-                yolo_layer.scale_x_y = float(block['scale_x_y'])
-                yolo_layer.ignore_thresh = float(block['ignore_thresh'])
+                anchor_masks = [int(i) for i in block['mask'].split(',')]
+                anchors = [float(i) for i in block['anchors'].split(',')]
+                anchors = [(anchors[i], anchors[i + 1], math.sin(anchors[i + 2]), math.cos(anchors[i + 2])) for i in
+                           range(0, len(anchors), 3)]
+                anchors = [anchors[i] for i in anchor_masks]
+
+                num_classes = int(block['classes'])
+                self.num_classes = num_classes
+                scale_x_y = float(block['scale_x_y'])
+                ignore_thresh = float(block['ignore_thresh'])
+
+                yolo_layer = YoloLayer(num_classes=num_classes, anchors=anchors, stride=prev_stride,
+                                       scale_x_y=scale_x_y, ignore_thresh=ignore_thresh)
+
                 out_filters.append(prev_filters)
                 out_strides.append(prev_stride)
                 models.append(yolo_layer)

@@ -21,30 +21,30 @@ class YoloLayer(nn.Module):
         true:outside
     '''
 
-    def __init__(self, num_classes=0, anchors=[], num_anchors=9, stride=32):
+    def __init__(self, num_classes, anchors, stride, scale_x_y, ignore_thresh, img_size=608):
         super(YoloLayer, self).__init__()
         # Update the attributions when parsing the cfg during create the darknet
         self.num_classes = num_classes
         self.anchors = anchors
-        self.num_anchors = num_anchors
-        self.anchor_step = len(anchors) // num_anchors
+        self.num_anchors = len(anchors)
         self.coord_scale = 1
         self.noobj_scale = 1
         self.obj_scale = 5
         self.class_scale = 1
-        self.thresh = 0.6
-        self.ignore_thresh = 0.7
+        self.ignore_thresh = ignore_thresh
         self.stride = stride
         self.seen = 0
-        self.scale_x_y = 1
+        self.scale_x_y = scale_x_y
         self.mse_loss = nn.MSELoss()
         self.bce_loss = nn.BCELoss()
+        self.grid_size = 0
+        self.img_size = img_size
 
     def compute_grid_offsets(self, grid_size, cuda=True):
         self.grid_size = grid_size
         g = self.grid_size
         FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
-        self.stride = self.img_dim / self.grid_size
+        self.stride = self.img_size / self.grid_size
         # Calculate offsets for each grid
         self.grid_x = torch.arange(g).repeat(g, 1).view([1, 1, g, g]).type(FloatTensor)
         self.grid_y = torch.arange(g).repeat(g, 1).t().view([1, 1, g, g]).type(FloatTensor)
@@ -117,12 +117,12 @@ class YoloLayer(nn.Module):
         class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
 
         rotated_iou_scores = rotated_box_11_iou_polygon(pred_boxes[b, best_n, gj, gi], target_boxes, nG)
-        iou_scores[b, best_n, gj, gi] = rotated_iou_scores.to('cuda:0')
+        iou_scores[b, best_n, gj, gi] = rotated_iou_scores.cuda()
 
         tconf = obj_mask.float()
         return iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf
 
-    def forward(self, x, targets=None):
+    def forward(self, x, targets=None, img_size=608):
 
         # Tensors for cuda support
         FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor

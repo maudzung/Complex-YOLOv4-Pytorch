@@ -25,7 +25,7 @@ def create_model(configs):
         model = Yolov4(yolov4conv137weight=configs.yolov4conv137weight, n_classes=configs.n_classes, inference=False)
     elif (configs.arch == 'darknet') and (configs.cfgfile is not None):
         print('using darknet')
-        model = Darknet(cfgfile=configs.cfgfile, inference=False)
+        model = Darknet(cfgfile=configs.cfgfile)
     else:
         assert False, 'Undefined model backbone'
 
@@ -121,5 +121,8 @@ if __name__ == '__main__':
     from config.config import parse_configs
 
     configs = parse_configs()
-    model = create_model(configs)
-    summary(model.cuda(), (3, 608, 608))
+    model = create_model(configs).cuda()
+    sample_input = torch.randn((2, 3, 608, 608)).cuda()
+    # summary(model.cuda(), (3, 608, 608))
+    output = model(sample_input)
+    print(output.size())
