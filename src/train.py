@@ -130,14 +130,11 @@ def main_worker(gpu_idx, configs):
         return
 
     for epoch in range(configs.start_epoch, configs.num_epochs + 1):
-        # Get the current learning rate
-        for param_group in optimizer.param_groups:
-            lr = param_group['lr']
         if logger is not None:
             logger.info('{}'.format('*-' * 40))
             logger.info('{} {}/{} {}'.format('=' * 35, epoch, configs.num_epochs, '=' * 35))
             logger.info('{}'.format('*-' * 40))
-            logger.info('>>> Epoch: [{}/{}] learning rate: {:.2e}'.format(epoch, configs.num_epochs, lr))
+            logger.info('>>> Epoch: [{}/{}]'.format(epoch, configs.num_epochs))
 
         if configs.distributed:
             train_sampler.set_epoch(epoch)
@@ -214,6 +211,7 @@ def train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs
             if (global_step % configs.print_freq) == 0:
                 # Tensorboard
                 tensorboard_log = get_tensorboard_log(model)
+                tensorboard_log['lr'] = lr_scheduler.get_lr()[0] * configs.batch_size * configs.subdivisions
                 tensorboard_log['avg_loss'] = losses.avg
                 tb_writer.add_scalars('Train', tensorboard_log, global_step)
 
@@ -229,8 +227,8 @@ def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
 
-    conf_thres = 0.5
-    nms_thres = 0.5
+    conf_thresh = 0.5
+    nms_thresh = 0.5
     iou_threshold = 0.5
 
     progress = ProgressMeter(len(val_loader), [batch_time, data_time],
@@ -251,7 +249,7 @@ def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
             imgs = imgs.to(configs.device, non_blocking=True)
 
             outputs = model(imgs)
-            outputs = non_max_suppression_rotated_bbox(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            outputs = non_max_suppression_rotated_bbox(outputs, conf_thresh=conf_thresh, nms_thresh=nms_thresh)
 
             sample_metrics += get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold=iou_threshold)
 

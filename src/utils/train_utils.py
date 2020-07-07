@@ -24,10 +24,10 @@ def create_optimizer(configs, model):
         train_params = [param for param in model.parameters() if param.requires_grad]
 
     if configs.optimizer_type == 'sgd':
-        optimizer = torch.optim.SGD(train_params, lr=configs.lr / configs.batch_size / 4., momentum=configs.momentum,
-                                    weight_decay=configs.weight_decay)
+        optimizer = torch.optim.SGD(train_params, lr=configs.lr / configs.batch_size / configs.subdivisions,
+                                    momentum=configs.momentum, weight_decay=configs.weight_decay)
     elif configs.optimizer_type == 'adam':
-        optimizer = torch.optim.Adam(train_params, lr=configs.lr / configs.batch_size / 4.,
+        optimizer = torch.optim.Adam(train_params, lr=configs.lr / configs.batch_size / configs.subdivisions,
                                      weight_decay=configs.weight_decay, betas=(0.9, 0.999), eps=1e-08)
     else:
         assert False, "Unknown optimizer type"
