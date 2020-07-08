@@ -9,7 +9,6 @@
 """
 
 import sys
-import os
 
 import torch
 
@@ -72,12 +71,23 @@ def make_data_parallel(model, configs):
 
 
 if __name__ == '__main__':
-    from torchsummary import summary
-    from config.config import parse_configs
+    import argparse
 
-    configs = parse_configs()
-    model = create_model(configs).cuda()
-    sample_input = torch.randn((2, 3, 608, 608)).cuda()
+    from torchsummary import summary
+    from easydict import EasyDict as edict
+
+    parser = argparse.ArgumentParser(description='Complexer YOLO Implementation')
+    parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
+                        help='The name of the model architecture')
+    parser.add_argument('--cfgfile', type=str, default='../config/complex_yolov4.cfg', metavar='PATH',
+                        help='The path for cfgfile (only for darknet)')
+
+    configs = edict(vars(parser.parse_args()))
+
+    configs.device = torch.device('cuda:1')
+
+    model = create_model(configs).to(device=configs.device)
+    sample_input = torch.randn((1, 3, 608, 608)).to(device=configs.device)
     # summary(model.cuda(), (3, 608, 608))
     output = model(sample_input)
     print(output.size())
