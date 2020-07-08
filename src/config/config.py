@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 -----------------------------------------------------------------------------------
 # Author: Nguyen Mau Dung
-# DoC: 2020.05.21
+# DoC: 2020.07.01
 # email: nguyenmaudung93.kstn@gmail.com
 -----------------------------------------------------------------------------------
 # Description: The configurations of the project will be defined here
@@ -13,7 +13,6 @@ import argparse
 import sys
 
 import torch
-import numpy as np
 from easydict import EasyDict as edict
 
 sys.path.append('../')
@@ -28,20 +27,20 @@ def parse_configs():
     parser.add_argument('--saved_fn', type=str, default='complexer_yolo', metavar='FN',
                         help='The name using for saving logs, models,...')
     ####################################################################
-    ##############     Model configs            ###################
+    ##############     Model configs            ########################
     ####################################################################
     parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
     parser.add_argument('--cfgfile', type=str, default=None, metavar='PATH',
                         help='The path for cfgfile (only for darknet)')
-    parser.add_argument('--dropout_p', type=float, default=0.5, metavar='P',
-                        help='The dropout probability of the model')
     parser.add_argument('--pretrained_path', type=str, default=None, metavar='PATH',
                         help='the path of the pretrained checkpoint')
 
     ####################################################################
     ##############     Dataloader and Running configs            #######
     ####################################################################
+    parser.add_argument('--img_size', type=int, default=608,
+                        help='the size of input image')
     parser.add_argument('--multiscale_training', action='store_true',
                         help='If true, use scaling data for training')
     parser.add_argument('--no-val', action='store_true',
@@ -63,7 +62,7 @@ def parse_configs():
     parser.add_argument('--checkpoint_freq', type=int, default=5, metavar='N',
                         help='frequency of saving checkpoints (default: 3)')
     ####################################################################
-    ##############     Training strategy            ###################
+    ##############     Training strategy            ####################
     ####################################################################
 
     parser.add_argument('--start_epoch', type=int, default=1, metavar='N',
@@ -88,7 +87,7 @@ def parse_configs():
                         help='number of burn in step')
 
     ####################################################################
-    ##############     Loss weight            ###################
+    ##############     Loss weight            ##########################
     ####################################################################
 
     ####################################################################
@@ -118,25 +117,11 @@ def parse_configs():
                         help='only evaluate the model, not training')
     parser.add_argument('--resume_path', type=str, default=None, metavar='PATH',
                         help='the path of the resumed checkpoint')
-    parser.add_argument('--save_test_output', action='store_true',
-                        help='If true, the image of testing phase will be saved')
-
-    ####################################################################
-    ##############     Demonstration configurations     ###################
-    ####################################################################
-    parser.add_argument('--video_path', type=str, default=None, metavar='PATH',
-                        help='the path of the video that needs to demo')
-    parser.add_argument('--output_format', type=str, default='text', metavar='PATH',
-                        help='the type of the demo output')
-    parser.add_argument('--show_image', action='store_true',
-                        help='If true, show the image during demostration')
-    parser.add_argument('--save_demo_output', action='store_true',
-                        help='If true, the image of demonstration phase will be saved')
 
     configs = edict(vars(parser.parse_args()))
 
     ####################################################################
-    ############## Hardware configurations ############################
+    ############## Hardware configurations #############################
     ####################################################################
     configs.device = torch.device('cpu' if configs.no_cuda else 'cuda')
     configs.ngpus_per_node = torch.cuda.device_count()
@@ -144,32 +129,15 @@ def parse_configs():
     configs.pin_memory = True
 
     ####################################################################
-    ##############     Data configs            ###################
+    ############## Dataset, logs, Checkpoints dir ######################
     ####################################################################
     configs.working_dir = '../'
     configs.dataset_dir = os.path.join(configs.working_dir, 'dataset', 'kitti')
-
-    ####################################################################
-    ############## logs, Checkpoints, and results dir ########################
-    ####################################################################
     configs.checkpoints_dir = os.path.join(configs.working_dir, 'checkpoints', configs.saved_fn)
     configs.logs_dir = os.path.join(configs.working_dir, 'logs', configs.saved_fn)
 
-    configs.results_dir = os.path.join(configs.working_dir, 'results')
-
     make_folder(configs.checkpoints_dir)
     make_folder(configs.logs_dir)
-    make_folder(configs.results_dir)
-
-    if configs.save_test_output:
-        configs.saved_dir = os.path.join(configs.results_dir, configs.saved_fn)
-        make_folder(configs.saved_dir)
-
-    if configs.save_demo_output:
-        configs.save_demo_dir = os.path.join(configs.results_dir, 'demo', configs.saved_fn)
-        make_folder(configs.save_demo_dir)
-
-    configs.img_size = 608
 
     return configs
 
