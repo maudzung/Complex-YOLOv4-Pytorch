@@ -35,7 +35,7 @@ class KittiDataset(Dataset):
         self.img_size = cnf.BEV_WIDTH
         self.max_objects = 100
         self.min_size = self.img_size - 3 * 32
-        self.max_size = self.img_size + 3 * 32
+        self.max_size = self.img_size
         self.batch_count = 0
         is_test = self.split == 'test'
         assert mode in ['train', 'val', 'test'], 'Invalid mode: {}'.format(mode)
