@@ -57,21 +57,40 @@ def create_test_dataloader(configs):
 
 
 if __name__ == '__main__':
+    import argparse
+    import os
+
     import cv2
     import numpy as np
+    from easydict import EasyDict as edict
 
-    from config.config import parse_configs
     import data_process.kitti_bev_utils as bev_utils
     from data_process import kitti_data_utils
     from utils.prediction_utils import invert_target
     from utils.visualization_utils import show_image_with_boxes
+    import config.kitti_config as cnf
 
-    configs = parse_configs()
+    parser = argparse.ArgumentParser(description='Complexer YOLO Implementation')
+
+    parser.add_argument('--img_size', type=int, default=608,
+                        help='the size of input image')
+    parser.add_argument('--multiscale_training', action='store_true',
+                        help='If true, use scaling data for training')
+    parser.add_argument('--num_samples', type=int, default=None,
+                        help='Take a subset of the dataset to run and debug')
+    parser.add_argument('--num_workers', type=int, default=1,
+                        help='Number of threads for loading data')
+    parser.add_argument('--batch_size', type=int, default=1,
+                        help='mini-batch size (default: 1)')
+
+    configs = edict(vars(parser.parse_args()))
     configs.distributed = False  # For testing
+    configs.pin_memory = True
+    configs.dataset_dir = os.path.join('../../', 'dataset', 'kitti')
+
     train_dataloader, val_dataloader, train_sampler = create_train_val_dataloader(configs)
     print('len train_dataloader: {}, val_dataloader: {}'.format(len(train_dataloader), len(val_dataloader)))
-
-    img_size = configs.BEV_WIDTH
+    print('\n\nPress n to see the next sample >>> press Esc to quit...')
 
     for batch_i, (img_files, imgs, targets) in enumerate(val_dataloader):
         img_file = img_files[0]
@@ -81,18 +100,18 @@ if __name__ == '__main__':
         img_rgb = show_image_with_boxes(img_rgb, objects_pred, calib, False)
 
         # Rescale target
-        targets[:, 2:6] *= img_size
+        targets[:, 2:6] *= configs.img_size
         # Get yaw angle
         targets[:, 6] = torch.atan2(targets[:, 6], targets[:, 7])
 
         img = imgs.squeeze() * 255
         img = img.permute(1, 2, 0).numpy().astype(np.uint8)
-        img_display = np.zeros((img_size, img_size, 3), np.uint8)
+        img_display = np.zeros((configs.img_size, configs.img_size, 3), np.uint8)
         img_display[...] = img[...]
 
         for c, x, y, w, l, yaw in targets[:, 1:7].numpy():
             # Draw rotated box
-            bev_utils.drawRotatedBox(img_display, x, y, w, l, yaw, configs.colors[int(c)])
+            bev_utils.drawRotatedBox(img_display, x, y, w, l, yaw, cnf.colors[int(c)])
 
         cv2.imshow('img-kitti-bev', img_display)
         cv2.imshow('img_rgb', img_rgb)

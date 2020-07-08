@@ -21,7 +21,7 @@ from utils.misc import make_folder
 
 
 def parse_configs():
-    parser = argparse.ArgumentParser(description='Complexer YOLO Implementation')
+    parser = argparse.ArgumentParser(description='The Implementation of Complex YOLOv4')
     parser.add_argument('--seed', type=int, default=2020,
                         help='re-produce the results with seed random')
     parser.add_argument('--saved_fn', type=str, default='complexer_yolo', metavar='FN',
@@ -140,8 +140,3 @@ def parse_configs():
     make_folder(configs.logs_dir)
 
     return configs
-
-
-if __name__ == "__main__":
-    configs = parse_configs()
-    print(configs)
