@@ -38,7 +38,7 @@ The downloaded data includes:
 - Camera calibration matrices of object data set _**(16 MB)**_: for visualization of predictions
 - Left color images of object data set _**(12 GB)**_: for visualization of predictions
 
-Please make sure that you construct the source code & dataset directories structure below.
+Please make sure that you construct the source code & dataset directories structure as below.
 
 For 3D point cloud preprocessing, please refer to the previous works:
 - [VoxelNet-Pytorch](https://github.com/skyhehe123/VoxelNet-pytorch)
@@ -73,7 +73,7 @@ python test.py --gpu_idx 0
 ##### 2.4.3.1. Single machine, single gpu
 
 ```shell script
-python train.py --gpu_idx 0
+python train.py --gpu_idx 0 --multiscale_training
 ```
 
 ##### 2.4.3.2. Multi-processing Distributed Data Parallel Training
