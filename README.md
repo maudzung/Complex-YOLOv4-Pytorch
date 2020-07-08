@@ -15,7 +15,7 @@ The PyTorch Implementation based on YOLOv4 of the paper: [Complex-YOLO: Real-tim
 - [x] Realtime 3D object detection based on YOLOv4
 - [x] [Distributed Data Parallel Training](https://github.com/pytorch/examples/tree/master/distributed/ddp)
 - [x] TensorboardX
-- [ ] Tried to use [CIoU](https://arxiv.org/pdf/1911.08287.pdf) / [GIoU](https://arxiv.org/pdf/1902.09630v2.pdf) loss function.
+- [ ] Try to use [CIoU](https://arxiv.org/pdf/1911.08287.pdf) / [GIoU](https://arxiv.org/pdf/1902.09630v2.pdf) loss for optimization.
 
 ## 2. Getting Started
 ### 2.1. Requirement
@@ -33,8 +33,8 @@ Download the 3D KITTI detection dataset from [here](http://www.cvlibs.net/datase
 
 The downloaded data includes:
 
-- Velodyne point clouds _**(29 GB)**_: input data to VoxelNet
-- Training labels of object data set _**(5 MB)**_: input label to VoxelNet
+- Velodyne point clouds _**(29 GB)**_: input data to the Complex-YOLO model
+- Training labels of object data set _**(5 MB)**_: input label to the Complex-YOLO model
 - Camera calibration matrices of object data set _**(16 MB)**_: for visualization of predictions
 - Left color images of object data set _**(12 GB)**_: for visualization of predictions
 
@@ -42,8 +42,8 @@ Please make sure that you construct the source code & dataset directories struct
 
 For 3D point cloud preprocessing, please refer to the previous works:
 - [VoxelNet-Pytorch](https://github.com/skyhehe123/VoxelNet-pytorch)
-- [Complex-YOLOv3](https://github.com/ghimiredhikura/Complex-YOLOv3)
 - [Complex-YOLOv2](https://github.com/AI-liu/Complex-YOLO)
+- [Complex-YOLOv3](https://github.com/ghimiredhikura/Complex-YOLOv3)
 
 
 ### 2.3. Complex-YOLO architecture
@@ -165,15 +165,18 @@ Thank you!
 ${ROOT}   
 └── dataset/    
     └── kitti
-        ├── training
-        |   ├── image_2 <-- for visualization
-        |   ├── calib
-        |   ├── label_2
-        |   ├── velodyne
-        └── testing  
-        |   ├── image_2 <-- for visualization
-        |   ├── calib
-        |   ├── velodyne 
+        ├──ImageSets/
+        |   ├── train.txt
+        |   ├── val.txt
+        ├── training/
+        |   ├── image_2/ <-- for visualization
+        |   ├── calib/
+        |   ├── label_2/
+        |   ├── velodyne/
+        └── testing/  
+        |   ├── image_2/ <-- for visualization
+        |   ├── calib/
+        |   ├── velodyne/ 
 └── src/
     └── config/
     └── data_process/
