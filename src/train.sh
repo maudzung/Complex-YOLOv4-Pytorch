@@ -12,4 +12,5 @@ python train.py \
   --gpu_idx 1 \
   --lr 0.0025 \
   --burn_in 50 \
-  --steps 1500 4000
+  --steps 1500 4000 \
+  --multiscale_training
