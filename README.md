@@ -9,7 +9,7 @@ The PyTorch Implementation based on YOLOv4 of the paper: [Complex-YOLO: Real-tim
 
 ## Demo
 
-![demo](./docs/demo_yolov3.gif)
+![demo](./docs/demo_complex_yolo.gif)
 
 ## Features
 - [x] Realtime 3D object detection based on YOLOv4
