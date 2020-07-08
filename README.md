@@ -65,8 +65,10 @@ python kitti_dataloader.py --batch_size 1 --num_workers 1
 #### 2.4.2. Inference
 
 ```shell script
-python test.py --gpu_idx 0
+python test.py --gpu_idx 0 --pretrained_path <paths>
 ```
+
+The trained model will be provided soon. Please watch the repo to get notifications for next update.
 
 #### 2.4.3. Training
 
@@ -104,6 +106,32 @@ To reproduce the results, you can run the bash shell script
 ```bash
 ./train.sh
 ```
+
+### 2.5. Evaluation
+
+```shell script
+python eval_mAP.py
+```
+
+The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 will be updated soon. 
+
+**mAP Comparison** _(min 0.50 IoU)_
+
+| Model/Class             | Car     | Pedestrian | Cyclist | Average |
+| ----------------------- |:--------|:-----------|:--------|:--------|
+| Complex-YOLO-v2         |    |       |    |    |
+| Complex-YOLO-v3         |    |       |    |    |
+| Complex-YOLO-v4         |    |       |    |    |
+
+
+### 2.6. List of usage for Bag of Freebies (BoF) & Bag of Specials (BoS) in this implementation
+
+
+|   |Backbone   | Detector   |
+|---|---|---|
+|**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) |[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random traing shapes <br>   |
+|**BoS**   |[x] Mish activation <br> [x] Cross-stage partial connections (CSP) <br> [x] Multi-input weighted residual connections (MiWRC)   |[x] Mish activation <br> [x] SPP-block <br> [x] SAM-block <br> [x] PAN path-aggregation block <br> [ ] CIoU/GIoU loss |
+
 
 ## Contact
 
@@ -152,6 +180,7 @@ ${ROOT}
     └── models/
     └── utils/
     └── demo.py
+    └── eval_mAP.py
     └── test.py
     └── train.py
     └── train.sh
