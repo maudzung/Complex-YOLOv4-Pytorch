@@ -63,7 +63,7 @@ if __name__ == '__main__':
     from config.config import parse_configs
     import data_process.kitti_bev_utils as bev_utils
     from data_process import kitti_data_utils
-    from inference.prediction_utils import invert_target
+    from utils.prediction_utils import invert_target
     from utils.visualization_utils import show_image_with_boxes
 
     configs = parse_configs()
