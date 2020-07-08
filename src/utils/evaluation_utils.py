@@ -307,35 +307,20 @@ def nms_cpu(boxes, confs, nms_thresh=0.5):
     :return:
     """
     # order of reduce confidence (high --> low)
-    nms_cpu_start_time = time.time()
     order = confs.argsort()[::-1]
-    print('inside nms_cpu - done 1: {}'.format(time.time() - nms_cpu_start_time))
-    nms_cpu_start_time = time.time()
 
     polygons = compute_polygons(boxes)  # 4 vertices of the box
 
-    print('inside nms_cpu - done 1.5: {}'.format(time.time() - nms_cpu_start_time))
-    nms_cpu_start_time = time.time()
-
     areas = [polygon.area for polygon in polygons]
-
-    print('inside nms_cpu - done 2: {}'.format(time.time() - nms_cpu_start_time))
-    nms_cpu_start_time = time.time()
 
     keep = []
     while order.size > 0:
-        print('order: {}'.format(order.size))
         idx_self = order[0]
         idx_other = order[1:]
         keep.append(idx_self)
-        compute_iou_start_time = time.time()
         over = compute_iou_nms(idx_self, idx_other, polygons, areas)
-        print('end compute_iou: {}'.format(time.time() - compute_iou_start_time))
         inds = np.where(over <= nms_thresh)[0]
         order = order[inds + 1]
-
-    print('inside nms_cpu - done 3: {}'.format(time.time() - nms_cpu_start_time))
-    nms_cpu_start_time = time.time()
 
     return np.array(keep)
 
@@ -347,9 +332,6 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
         Returns detections with shape:
             (x, y, w, l, im, re, object_conf, class_score, class_pred)
     """
-    print('doing post_processing')
-    start_time = time.time()
-
     if type(outputs).__name__ != 'ndarray':
         outputs = outputs.numpy()
     # outputs shape: (batch_size, 22743, 10)
@@ -359,31 +341,20 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
 
     # confs: [batch, num, num_classes]
     confs = outputs[:, :, 6:7] * outputs[:, :, 7:]
-    print('done 1: {}'.format(time.time() - start_time))
-    start_time = time.time()
 
     # [batch, num, num_classes] --> [batch, num]
     max_conf = np.max(confs, axis=2)
     max_id = np.argmax(confs, axis=2)
 
     bboxes_batch = [None for _ in range(batch_size)]
-    print('done 2: {}'.format(time.time() - start_time))
 
     for i in range(batch_size):
-        start_time = time.time()
-
         argwhere = max_conf[i] > conf_thresh
         l_box_array = box_array[i, argwhere, :]
         l_max_conf = max_conf[i, argwhere]
         l_max_id = max_id[i, argwhere]
 
-        print('i = {}, done 1: {}'.format(i, time.time() - start_time))
-        start_time = time.time()
-
         keep = nms_cpu(l_box_array, l_max_conf, nms_thresh=nms_thresh)
-
-        print('i = {}, done 2: {}'.format(i, time.time() - start_time))
-        start_time = time.time()
 
         bboxes = []
         if (keep.size > 0):
@@ -395,8 +366,6 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
                 bboxes.append(
                     [l_box_array[j, 0], l_box_array[j, 1], l_box_array[j, 2], l_box_array[j, 3], l_box_array[j, 4],
                      l_box_array[j, 5], l_max_conf[j], l_max_id[j]])
-        print('i = {}, done 3: {}'.format(i, time.time() - start_time))
-        start_time = time.time()
         if len(bboxes) > 0:
             bboxes_batch[i] = bboxes
 
