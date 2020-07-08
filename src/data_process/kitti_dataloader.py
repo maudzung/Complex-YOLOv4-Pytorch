@@ -50,8 +50,7 @@ def create_test_dataloader(configs):
     if configs.distributed:
         test_sampler = torch.utils.data.distributed.DistributedSampler(test_dataset)
     test_dataloader = DataLoader(test_dataset, batch_size=configs.batch_size, shuffle=False,
-                                 pin_memory=configs.pin_memory, num_workers=configs.num_workers, sampler=test_sampler,
-                                 collate_fn=test_dataset.collate_fn)
+                                 pin_memory=configs.pin_memory, num_workers=configs.num_workers, sampler=test_sampler)
 
     return test_dataloader
 

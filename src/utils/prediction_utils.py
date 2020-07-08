@@ -7,6 +7,7 @@ sys.path.append('../')
 import config.kitti_config  as cnf
 from data_process import kitti_bev_utils, transformation, kitti_data_utils
 
+
 def invert_target(targets, calib, img_shape_2d, RGB_Map=None):
     predictions = targets
     predictions = kitti_bev_utils.inverse_yolo_target(predictions, cnf.boundary)
@@ -16,8 +17,6 @@ def invert_target(targets, calib, img_shape_2d, RGB_Map=None):
     objects_new = []
     corners3d = []
     for index, l in enumerate(predictions):
-
-        str = "Pedestrian"
         if l[0] == 0:
             str = "Car"
         elif l[0] == 1:
@@ -25,7 +24,7 @@ def invert_target(targets, calib, img_shape_2d, RGB_Map=None):
         elif l[0] == 2:
             str = "Cyclist"
         else:
-            str = "DontCare"
+            str = "Ignore"
         line = '%s -1 -1 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0' % str
 
         obj = kitti_data_utils.Object3d(line)
@@ -77,8 +76,10 @@ def predictions_to_kitti_format(img_detections, calib, img_shape_2d, img_size, R
         if detections is None:
             continue
         # Rescale boxes to original image
-        for x, y, w, l, im, re, conf, cls_conf, cls_pred in detections:
-            yaw = np.arctan2(im, re)
+        for x, y, w, l, im, re, cls_conf, cls_pred in detections:
+            if count >= 50:  # Max 50 objects
+                break
+            # yaw = np.arctan2(im, re)
             predictions[count, :] = cls_pred, x / img_size, y / img_size, w / img_size, l / img_size, im, re
             count += 1
 
@@ -89,8 +90,6 @@ def predictions_to_kitti_format(img_detections, calib, img_shape_2d, img_size, R
     objects_new = []
     corners3d = []
     for index, l in enumerate(predictions):
-
-        str = "Pedestrian"
         if l[0] == 0:
             str = "Car"
         elif l[0] == 1:
@@ -98,7 +97,7 @@ def predictions_to_kitti_format(img_detections, calib, img_shape_2d, img_size, R
         elif l[0] == 2:
             str = "Cyclist"
         else:
-            str = "DontCare"
+            str = "Ignore"
         line = '%s -1 -1 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0' % str
 
         obj = kitti_data_utils.Object3d(line)

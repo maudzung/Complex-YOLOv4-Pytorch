@@ -44,6 +44,8 @@ def parse_test_configs():
 
     parser.add_argument('--no_cuda', action='store_true',
                         help='If true, cuda is not used.')
+    parser.add_argument('--gpu_idx', default=None, type=int,
+                        help='GPU index to use.')
 
     parser.add_argument('--img_size', type=int, default=608,
                         help='the size of input image')
@@ -64,6 +66,7 @@ def parse_test_configs():
                         help='If true, the image of demonstration phase will be saved')
 
     configs = edict(vars(parser.parse_args()))
+    configs.pin_memory = True
 
     ####################################################################
     ##############Dataset, Checkpoints, and results dir configs#########
@@ -85,15 +88,15 @@ if __name__ == '__main__':
     model = create_model(configs)
     model.load_state_dict(torch.load(configs.pretrained_path))
 
-    configs.device = torch.device('cpu' if configs.no_cuda else 'cuda')
+    configs.device = torch.device('cpu' if configs.no_cuda else 'cuda:{}'.format(configs.gpu_idx))
     model.to(device=configs.device)
 
     model.eval()
 
     test_dataloader = create_test_dataloader(configs)
     with torch.no_grad():
-        for index, (img_paths, bev_maps) in enumerate(test_dataloader):
-            input_imgs = bev_maps.to(device=configs.device)
+        for batch_idx, (img_paths, bev_maps) in enumerate(test_dataloader):
+            input_imgs = bev_maps.to(device=configs.device).float()
             t1 = time_synchronized()
             detections = model(input_imgs)
             detections = post_processing(detections, conf_thresh=0.95, nms_thresh=0.4)
@@ -112,8 +115,10 @@ if __name__ == '__main__':
                 if detections is None:
                     continue
                 # Rescale boxes to original image
+                detections = np.array(detections)
+                print('detections shape: {}'.format(detections.shape))
                 detections = rescale_boxes(detections, configs.img_size, RGB_Map.shape[:2])
-                for x, y, w, l, im, re, conf, cls_conf, cls_pred in detections:
+                for x, y, w, l, im, re, cls_conf, cls_pred in detections:
                     yaw = np.arctan2(im, re)
                     # Draw rotated box
                     kitti_bev_utils.drawRotatedBox(RGB_Map, x, y, w, l, yaw, cnf.colors[int(cls_pred)])
