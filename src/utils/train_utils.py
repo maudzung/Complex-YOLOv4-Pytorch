@@ -39,11 +39,11 @@ def create_lr_scheduler(optimizer, configs):
     """Create learning rate scheduler for training process"""
 
     def burnin_schedule(i):
-        if i < configs.burn_in:
+        if i < int(configs.burn_in):
             factor = pow(i / configs.burn_in, 4)
-        elif i < configs.steps[0]:
+        elif i < int(configs.steps[0]):
             factor = 1.0
-        elif i < configs.steps[1]:
+        elif i < int(configs.steps[1]):
             factor = 0.1
         else:
             factor = 0.01
