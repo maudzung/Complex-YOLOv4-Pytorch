@@ -16,10 +16,7 @@ from utils.evaluation_utils import rotated_box_11_iou_polygon, rotated_box_wh_io
 
 
 class YoloLayer(nn.Module):
-    ''' Yolo layer
-    model_out: while inference,is post-processing inside or outside the model
-        true:outside
-    '''
+    """Yolo layer"""
 
     def __init__(self, num_classes, anchors, stride, scale_x_y, ignore_thresh, img_size=608):
         super(YoloLayer, self).__init__()
@@ -125,8 +122,6 @@ class YoloLayer(nn.Module):
             torch.bool), tx, ty, tw, th, tim, tre, tcls, tconf
 
     def forward(self, x, targets=None, img_size=608):
-
-        # Tensors for cuda support
         FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor
 
         num_samples = x.size(0)
@@ -139,8 +134,8 @@ class YoloLayer(nn.Module):
         )
 
         # Get outputs
-        x = torch.sigmoid(prediction[..., 0])  # Center x
-        y = torch.sigmoid(prediction[..., 1])  # Center y
+        x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - 0.5 * (self.scale_x_y - 1)  # Center x
+        y = torch.sigmoid(prediction[..., 1]) * self.scale_x_y - 0.5 * (self.scale_x_y - 1)  # Center y
         w = prediction[..., 2]  # Width
         h = prediction[..., 3]  # Height
         im = prediction[..., 4]  # angle imaginary part
@@ -154,10 +149,10 @@ class YoloLayer(nn.Module):
 
         # Add offset and scale with anchors
         pred_boxes = FloatTensor(prediction[..., :6].shape)
-        pred_boxes[..., 0] = x.data + self.grid_x
-        pred_boxes[..., 1] = y.data + self.grid_y
-        pred_boxes[..., 2] = torch.exp(w.data) * self.anchor_w
-        pred_boxes[..., 3] = torch.exp(h.data) * self.anchor_h
+        pred_boxes[..., 0] = x.detach() + self.grid_x
+        pred_boxes[..., 1] = y.detach() + self.grid_y
+        pred_boxes[..., 2] = torch.exp(w.detach()) * self.anchor_w
+        pred_boxes[..., 3] = torch.exp(h.detach()) * self.anchor_h
         pred_boxes[..., 4] = im
         pred_boxes[..., 5] = re
 
@@ -169,17 +164,14 @@ class YoloLayer(nn.Module):
                 pred_conf.view(num_samples, -1, 1),
                 pred_cls.view(num_samples, -1, self.num_classes),
             ),
-            -1,
+            dim=-1,
         )
 
         if targets is None:
             return output, 0
         else:
             iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(
-                pred_boxes=pred_boxes,
-                pred_cls=pred_cls,
-                target=targets,
-                anchors=self.scaled_anchors
+                pred_boxes=pred_boxes, pred_cls=pred_cls, target=targets, anchors=self.scaled_anchors
             )
 
             # Loss : Mask outputs to ignore non-existing objects (except with conf. loss)
