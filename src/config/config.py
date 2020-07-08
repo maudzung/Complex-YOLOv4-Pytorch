@@ -31,7 +31,7 @@ def parse_configs():
     ####################################################################
     parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
-    parser.add_argument('--cfgfile', type=str, default=None, metavar='PATH',
+    parser.add_argument('--cfgfile', type=str, default='config/complex_yolov4.cfg', metavar='PATH',
                         help='The path for cfgfile (only for darknet)')
     parser.add_argument('--pretrained_path', type=str, default=None, metavar='PATH',
                         help='the path of the pretrained checkpoint')
@@ -50,17 +50,17 @@ def parse_configs():
     parser.add_argument('--num_workers', type=int, default=8,
                         help='Number of threads for loading data')
     parser.add_argument('--batch_size', type=int, default=4,
-                        help='mini-batch size (default: 64), this is the total'
+                        help='mini-batch size (default: 4), this is the total'
                              'batch size of all GPUs on the current node when using'
                              'Data Parallel or Distributed Data Parallel')
     parser.add_argument('--subdivisions', type=int, default=16,
                         help='subdivisions during training')
-    parser.add_argument('--print_freq', type=int, default=20, metavar='N',
-                        help='print frequency (default: 10)')
+    parser.add_argument('--print_freq', type=int, default=50, metavar='N',
+                        help='print frequency (default: 50)')
     parser.add_argument('--tensorboard_freq', type=int, default=20, metavar='N',
-                        help='frequency of saving tensorboard (default: 10)')
-    parser.add_argument('--checkpoint_freq', type=int, default=5, metavar='N',
-                        help='frequency of saving checkpoints (default: 3)')
+                        help='frequency of saving tensorboard (default: 20)')
+    parser.add_argument('--checkpoint_freq', type=int, default=2, metavar='N',
+                        help='frequency of saving checkpoints (default: 2)')
     ####################################################################
     ##############     Training strategy            ####################
     ####################################################################
@@ -69,7 +69,7 @@ def parse_configs():
                         help='the starting epoch')
     parser.add_argument('--num_epochs', type=int, default=300, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--lr', type=float, default=0.00261, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.0025, metavar='LR',
                         help='initial learning rate')
     parser.add_argument('--minimum_lr', type=float, default=1e-7, metavar='MIN_LR',
                         help='minimum learning rate during training')
@@ -79,11 +79,9 @@ def parse_configs():
                         help='weight decay (default: 1e-6)')
     parser.add_argument('--optimizer_type', type=str, default='adam', metavar='OPTIMIZER',
                         help='the type of optimizer, it can be sgd or adam')
-    parser.add_argument('--lr_type', type=str, default='plateau', metavar='SCHEDULER',
-                        help='the type of the learning rate scheduler (steplr or ReduceonPlateau)')
-    parser.add_argument('--burn_in', type=int, default=1000, metavar='N',
+    parser.add_argument('--burn_in', type=int, default=50, metavar='N',
                         help='number of burn in step')
-    parser.add_argument('--steps', nargs='*', default=[400000, 450000],
+    parser.add_argument('--steps', nargs='*', default=[1500, 4000],
                         help='number of burn in step')
 
     ####################################################################
