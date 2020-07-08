@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 python train.py \
-  --saved_fn 'complex_yolov4_20200707' \
+  --saved_fn 'complex_yolov4_20200708' \
   --arch 'darknet' \
   --cfgfile ./config/complex_yolov4.cfg \
   --batch_size 4 \
@@ -8,7 +8,8 @@ python train.py \
   --no-val \
   --print_freq 50 \
   --tensorboard_freq 20 \
-  --checkpoint_freq 5 \
-  --gpu_idx 0 \
-  --burn_in 125 \
-  --steps 500 1000
+  --checkpoint_freq 2 \
+  --gpu_idx 1 \
+  --lr 0.0025 \
+  --burn_in 50 \
+  --steps 1500 4000
