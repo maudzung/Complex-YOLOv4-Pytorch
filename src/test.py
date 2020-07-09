@@ -28,7 +28,7 @@ from utils.misc import make_folder
 from utils.evaluation_utils import post_processing, rescale_boxes
 from utils.misc import time_synchronized
 from utils.prediction_utils import predictions_to_kitti_format
-from utils.visualization_utils import show_image_with_boxes
+from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev
 
 
 def parse_test_configs():
@@ -55,6 +55,11 @@ def parse_test_configs():
                         help='Number of threads for loading data')
     parser.add_argument('--batch_size', type=int, default=4,
                         help='mini-batch size (default: 4)')
+
+    parser.add_argument('--conf_thresh', type=float, default=0.5,
+                        help='the threshold for conf')
+    parser.add_argument('--nms_thresh', type=float, default=0.7,
+                        help='the threshold for conf')
 
     parser.add_argument('--video_path', type=str, default=None, metavar='PATH',
                         help='the path of the video that needs to demo')
@@ -86,50 +91,55 @@ if __name__ == '__main__':
     configs.distributed = False  # For testing
 
     model = create_model(configs)
-    model.load_state_dict(torch.load(configs.pretrained_path))
+    model.print_network()
+    assert os.path.isfile(configs.pretrained_path)
+    model.load_weights(configs.pretrained_path)
+    # model.load_state_dict(torch.load(configs.pretrained_path))
 
     configs.device = torch.device('cpu' if configs.no_cuda else 'cuda:{}'.format(configs.gpu_idx))
-    model.to(device=configs.device)
+    model = model.to(device=configs.device)
 
     model.eval()
 
     test_dataloader = create_test_dataloader(configs)
     with torch.no_grad():
-        for batch_idx, (img_paths, bev_maps) in enumerate(test_dataloader):
-            input_imgs = bev_maps.to(device=configs.device).float()
+        for batch_idx, (img_paths, imgs_bev) in enumerate(test_dataloader):
+            print('batch_idx: {}'.format(batch_idx))
+            input_imgs = imgs_bev.to(device=configs.device).float()
             t1 = time_synchronized()
             detections = model(input_imgs)
-            detections = post_processing(detections, conf_thresh=0.95, nms_thresh=0.4)
             t2 = time_synchronized()
+            print('outputs size: {}'.format(detections))
+            detections = post_processing(detections, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
 
             img_detections = []  # Stores detections for each image index
             img_detections.extend(detections)
-            bev_maps = torch.squeeze(bev_maps).numpy()
-            RGB_Map = np.zeros((cnf.BEV_WIDTH, cnf.BEV_WIDTH, 3))
-            RGB_Map[:, :, 2] = bev_maps[0, :, :]  # r_map
-            RGB_Map[:, :, 1] = bev_maps[1, :, :]  # g_map
-            RGB_Map[:, :, 0] = bev_maps[2, :, :]  # b_map
 
-            RGB_Map = (255 * RGB_Map).astype(np.uint8)
+            img_bev = imgs_bev.squeeze() * 255
+            img_bev = img_bev.permute(1, 2, 0).numpy().astype(np.uint8)
+            img_bev = cv2.resize(img_bev, (configs.img_size, configs.img_size))
             for detections in img_detections:
                 if detections is None:
                     continue
                 # Rescale boxes to original image
                 detections = np.array(detections)
-                print('detections shape: {}'.format(detections.shape))
-                detections = rescale_boxes(detections, configs.img_size, RGB_Map.shape[:2])
+                detections = rescale_boxes(detections, configs.img_size, img_bev.shape[:2])
                 for x, y, w, l, im, re, cls_conf, cls_pred in detections:
                     yaw = np.arctan2(im, re)
                     # Draw rotated box
-                    kitti_bev_utils.drawRotatedBox(RGB_Map, x, y, w, l, yaw, cnf.colors[int(cls_pred)])
+                    kitti_bev_utils.drawRotatedBox(img_bev, x, y, w, l, yaw, cnf.colors[int(cls_pred)])
 
-            img2d = cv2.imread(img_paths[0])
+            img_rgb = cv2.imread(img_paths[0])
             calib = kitti_data_utils.Calibration(img_paths[0].replace(".png", ".txt").replace("image_2", "calib"))
-            objects_pred = predictions_to_kitti_format(img_detections, calib, img2d.shape, configs.img_size)
-            img2d = show_image_with_boxes(img2d, objects_pred, calib, False)
+            objects_pred = predictions_to_kitti_format(img_detections, calib, img_rgb.shape, configs.img_size)
+            img_rgb = show_image_with_boxes(img_rgb, objects_pred, calib, False)
 
-            cv2.imshow("bev img", RGB_Map)
-            cv2.imshow("img2d", img2d)
+            img_bev = cv2.flip(cv2.flip(img_bev, 0), 1)
+
+            out_img = merge_rgb_to_bev(img_rgb, img_bev, output_width=608)
+            cv2.imshow('test-img', out_img)
+
+            print('Done testing the {} sample, time: {}ms'.format(batch_idx, (t2 - t1) * 1000))
 
             if cv2.waitKey(0) & 0xFF == 27:
                 break

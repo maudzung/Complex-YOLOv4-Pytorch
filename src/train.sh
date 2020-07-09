@@ -11,4 +11,6 @@ python train.py \
   --num_epochs 150 \
   --burn_in 100 \
   --steps 2000 5000 \
-  --multiscale_training
+  --multiscale_training \
+  --tensorboard_freq 50 \
+  --checkpoint_freq 5
