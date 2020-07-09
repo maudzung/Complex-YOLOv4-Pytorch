@@ -78,68 +78,14 @@ class KittiDataset(Dataset):
         else:
             if self.mosaic:
                 img_files, rgb_map, targets = self.load_mosaic(index)
-                rgb_map = torch.from_numpy(rgb_map).float()
-                return img_files[0], rgb_map, torch.from_numpy(targets).float()
+
+                return img_files[0], rgb_map, targets
             else:
-                img_file, rgb_map, targets = self.load_img_with_targets(index)
-                rgb_map = torch.from_numpy(rgb_map).float()
-
-                if self.hflip_transform is not None:
-                    rgb_map, targets = self.hflip_transform(rgb_map, targets)
-
-                return img_file, rgb_map, torch.from_numpy(targets).float()
-
-    def load_mosaic(self, index):
-        """loads images in a mosaic"""
-        targets_s4 = []
-        img_file_s4 = []
-        if self.random_padding:
-            yc, xc = [int(random.uniform(-x, 2 * self.img_size + x)) for x in self.mosaic_border]  # mosaic center
-        else:
-            yc, xc = [self.img_size, self.img_size]  # mosaic center
-
-        indices = [index] + [random.randint(0, self.num_samples - 1) for _ in range(3)]  # 3 additional image indices
-        for i, index in enumerate(indices):
-            img_file, img, targets = self.load_img_with_targets(index)
-            img_file_s4.append(img_file)
-
-            c, h, w = img.shape  # (3, 608, 608), numpy array
-
-            # place img in img4
-            if i == 0:  # top left
-                img4 = np.full((c, self.img_size * 2, self.img_size * 2),
-                               0.5)  # base image with 4 tiles (608x2,608x2,3)
-                x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
-                x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
-            elif i == 1:  # top right
-                x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, self.img_size * 2), yc
-                x1b, y1b, x2b, y2b = 0, h - (y2a - y1a), min(w, x2a - x1a), h
-            elif i == 2:  # bottom left
-                x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(self.img_size * 2, yc + h)
-                x1b, y1b, x2b, y2b = w - (x2a - x1a), 0, max(xc, w), min(y2a - y1a, h)
-            elif i == 3:  # bottom right
-                x1a, y1a, x2a, y2a = xc, yc, min(xc + w, self.img_size * 2), min(self.img_size * 2, yc + h)
-                x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
-
-            img4[:, y1a:y2a, x1a:x2a] = img[:, y1b:y2b, x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
-            padw = x1a - x1b
-            padh = y1a - y1b
-
-            # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
-            if targets.size > 0:
-                targets[:, 2] = (targets[:, 2] * w + padw) / (2 * self.img_size)
-                targets[:, 3] = (targets[:, 3] * h + padh) / (2 * self.img_size)
-                targets[:, 4] = targets[:, 4] * w / (2 * self.img_size)
-                targets[:, 5] = targets[:, 5] * h / (2 * self.img_size)
-
-            targets_s4.append(targets)
-        if len(targets_s4) > 0:
-            targets_s4 = np.concatenate(targets_s4, 0)
-            np.clip(targets_s4[:, 2:4], 0., 1. - 0.5 / self.img_size, targets_s4[:, 2:4])
-
-        return img_file_s4, img4, targets_s4
+                return self.load_img_with_targets(index)
 
     def load_img_only(self, index):
+        """Load only image for the testing phase"""
+
         sample_id = int(self.sample_id_list[index])
         lidarData = self.get_lidar(sample_id)
         b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
@@ -149,6 +95,8 @@ class KittiDataset(Dataset):
         return img_file, rgb_map
 
     def load_img_with_targets(self, index):
+        """Load images and targets for the training and validation phase"""
+
         sample_id = int(self.sample_id_list[index])
 
         lidarData = self.get_lidar(sample_id)
@@ -174,12 +122,67 @@ class KittiDataset(Dataset):
             if t.sum(0):
                 ntargets += 1
         # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
-        targets = np.zeros((ntargets, 8))
+        targets = torch.zeros((ntargets, 8))
         for i, t in enumerate(target):
             if t.sum(0):
-                targets[i, 1:] = t
+                targets[i, 1:] = torch.from_numpy(t)
+
+        rgb_map = torch.from_numpy(rgb_map).float()
+
+        if self.hflip_transform is not None:
+            rgb_map, targets = self.hflip_transform(rgb_map, targets)
 
         return img_file, rgb_map, targets
+
+    def load_mosaic(self, index):
+        """loads images in a mosaic"""
+
+        targets_s4 = []
+        img_file_s4 = []
+        if self.random_padding:
+            yc, xc = [int(random.uniform(-x, 2 * self.img_size + x)) for x in self.mosaic_border]  # mosaic center
+        else:
+            yc, xc = [self.img_size, self.img_size]  # mosaic center
+
+        indices = [index] + [random.randint(0, self.num_samples - 1) for _ in range(3)]  # 3 additional image indices
+        for i, index in enumerate(indices):
+            img_file, img, targets = self.load_img_with_targets(index)
+            img_file_s4.append(img_file)
+
+            c, h, w = img.size()  # (3, 608, 608), torch tensor
+
+            # place img in img4
+            if i == 0:  # top left
+                img_s4 = torch.full((c, self.img_size * 2, self.img_size * 2), 0.5, dtype=torch.float)
+                x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
+                x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
+            elif i == 1:  # top right
+                x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, self.img_size * 2), yc
+                x1b, y1b, x2b, y2b = 0, h - (y2a - y1a), min(w, x2a - x1a), h
+            elif i == 2:  # bottom left
+                x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(self.img_size * 2, yc + h)
+                x1b, y1b, x2b, y2b = w - (x2a - x1a), 0, max(xc, w), min(y2a - y1a, h)
+            elif i == 3:  # bottom right
+                x1a, y1a, x2a, y2a = xc, yc, min(xc + w, self.img_size * 2), min(self.img_size * 2, yc + h)
+                x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
+
+            img_s4[:, y1a:y2a, x1a:x2a] = img[:, y1b:y2b, x1b:x2b]  # img_s4[ymin:ymax, xmin:xmax]
+            padw = x1a - x1b
+            padh = y1a - y1b
+
+            # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
+            if targets.size(0) > 0:
+                targets[:, 2] = (targets[:, 2] * w + padw) / (2 * self.img_size)
+                targets[:, 3] = (targets[:, 3] * h + padh) / (2 * self.img_size)
+                targets[:, 4] = targets[:, 4] * w / (2 * self.img_size)
+                targets[:, 5] = targets[:, 5] * h / (2 * self.img_size)
+
+            targets_s4.append(targets)
+        if len(targets_s4) > 0:
+            targets_s4 = torch.cat(targets_s4, 0)
+            torch.clamp(targets_s4[:, 2:4], min=0., max=(1. - 0.5 / self.img_size), out=targets_s4[:, 2:4])
+
+        return img_file_s4, img_s4, targets_s4
 
     def __len__(self):
         return len(self.sample_id_list)
