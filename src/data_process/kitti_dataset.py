@@ -27,19 +27,21 @@ def resize(image, size):
 
 
 class KittiDataset(Dataset):
-    def __init__(self, dataset_dir, split='train', mode='TRAIN', data_aug=True, multiscale=False, num_samples=None):
+    def __init__(self, dataset_dir, split='train', mode='TRAIN', aug_transforms=None, hflip_prob=0., multiscale=False,
+                 num_samples=None):
         self.dataset_dir = dataset_dir
         self.split = split
         self.multiscale = multiscale
-        self.data_aug = data_aug
+        self.aug_transforms = aug_transforms
         self.img_size = cnf.BEV_WIDTH
-        self.max_objects = 100
         self.min_size = self.img_size - 3 * 32
         self.max_size = self.img_size
         self.batch_count = 0
         is_test = self.split == 'test'
         assert mode in ['train', 'val', 'test'], 'Invalid mode: {}'.format(mode)
         self.mode = mode
+
+        self.hflip_transform = transformation.Horizontal_Flip(p=hflip_prob) if (hflip_prob > 0) else None
 
         if is_test:
             self.lidar_dir = os.path.join(self.dataset_dir, 'testing', "velodyne")
@@ -79,8 +81,8 @@ class KittiDataset(Dataset):
                 labels[:, 1:] = transformation.camera_to_lidar_box(labels[:, 1:], calib.V2C, calib.R0,
                                                                    calib.P)  # convert rect cam to velo cord
 
-            if self.data_aug and self.mode == 'train':
-                lidarData, labels[:, 1:] = transformation.complex_yolo_pc_augmentation(lidarData, labels[:, 1:], True)
+            if self.aug_transforms is not None:
+                lidarData, labels[:, 1:] = self.aug_transforms(lidarData, labels[:, 1:])
 
             b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
             rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
@@ -99,9 +101,8 @@ class KittiDataset(Dataset):
 
             img = torch.from_numpy(rgb_map).float()
 
-            if self.data_aug:
-                if np.random.random() < 0.5:
-                    img, targets = self.horizontal_flip(img, targets)
+            if self.hflip_transform is not None:
+                img, targets = self.hflip_transform(img, targets)
 
             return img_file, img, targets
 
@@ -167,13 +168,6 @@ class KittiDataset(Dataset):
         imgs = torch.stack([resize(img, self.img_size) for img in imgs])
         self.batch_count += 1
         return paths, imgs, targets
-
-    def horizontal_flip(self, images, targets):
-        images = torch.flip(images, [-1])
-        targets[:, 2] = 1 - targets[:, 2]  # horizontal flip
-        targets[:, 6] = - targets[:, 6]  # yaw angle flip
-
-        return images, targets
 
     def get_image(self, idx):
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(idx))
