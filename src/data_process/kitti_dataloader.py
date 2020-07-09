@@ -66,7 +66,7 @@ if __name__ == '__main__':
     import data_process.kitti_bev_utils as bev_utils
     from data_process import kitti_data_utils
     from utils.prediction_utils import invert_target
-    from utils.visualization_utils import show_image_with_boxes
+    from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev
     import config.kitti_config as cnf
 
     parser = argparse.ArgumentParser(description='Complexer YOLO Implementation')
@@ -89,7 +89,7 @@ if __name__ == '__main__':
 
     train_dataloader, val_dataloader, train_sampler = create_train_val_dataloader(configs)
     print('len train_dataloader: {}, val_dataloader: {}'.format(len(train_dataloader), len(val_dataloader)))
-    print('\n\nPress n to see the next sample >>> press Esc to quit...')
+    print('\n\nPress n to see the next sample >>> Press Esc to quit...')
 
     for batch_i, (img_files, imgs, targets) in enumerate(val_dataloader):
         img_file = img_files[0]
@@ -103,17 +103,18 @@ if __name__ == '__main__':
         # Get yaw angle
         targets[:, 6] = torch.atan2(targets[:, 6], targets[:, 7])
 
-        img = imgs.squeeze() * 255
-        img = img.permute(1, 2, 0).numpy().astype(np.uint8)
-        img_display = np.zeros((configs.img_size, configs.img_size, 3), np.uint8)
-        img_display[...] = img[...]
+        img_bev = imgs.squeeze() * 255
+        img_bev = img_bev.permute(1, 2, 0).numpy().astype(np.uint8)
+        img_bev = cv2.resize(img_bev, (configs.img_size, configs.img_size))
 
         for c, x, y, w, l, yaw in targets[:, 1:7].numpy():
             # Draw rotated box
-            bev_utils.drawRotatedBox(img_display, x, y, w, l, yaw, cnf.colors[int(c)])
+            bev_utils.drawRotatedBox(img_bev, x, y, w, l, yaw, cnf.colors[int(c)])
 
-        cv2.imshow('img-kitti-bev', img_display)
-        cv2.imshow('img_rgb', img_rgb)
+        img_bev = cv2.flip(cv2.flip(img_bev, 0), 1)
+
+        out_img = merge_rgb_to_bev(img_rgb, img_bev, output_width=608)
+        cv2.imshow('sample_img', out_img)
 
         if cv2.waitKey(0) & 0xff == 27:
             break
