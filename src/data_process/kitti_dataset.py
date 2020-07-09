@@ -48,7 +48,6 @@ class KittiDataset(Dataset):
             self.label_dir = os.path.join(self.dataset_dir, 'testing', "label_2")
             self.lidar_paths = sorted(glob(os.path.join(self.lidar_dir, '*.bin')))
             self.image_idx_list = [os.path.basename(path)[:-4] for path in self.lidar_paths]
-            print(self.image_idx_list[0])
         else:
             self.lidar_dir = os.path.join(self.dataset_dir, 'training', "velodyne")
             self.image_dir = os.path.join(self.dataset_dir, 'training', "image_2")
