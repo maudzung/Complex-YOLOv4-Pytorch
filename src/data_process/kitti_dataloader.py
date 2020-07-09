@@ -27,7 +27,8 @@ def create_train_val_dataloader(configs):
     ], p=0.6)
     train_dataset = KittiDataset(configs.dataset_dir, split='train', mode='train', aug_transforms=train_aug_transforms,
                                  hflip_prob=0.5, multiscale=configs.multiscale_training,
-                                 num_samples=configs.num_samples)
+                                 num_samples=configs.num_samples, mosaic=configs.mosaic,
+                                 random_padding=configs.random_padding)
     train_sampler = None
     if configs.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -37,7 +38,7 @@ def create_train_val_dataloader(configs):
 
     val_sampler = None
     val_dataset = KittiDataset(configs.dataset_dir, split='val', mode='val', aug_transforms=None, hflip_prob=0.,
-                               multiscale=False, num_samples=configs.num_samples)
+                               multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
     if configs.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
     val_dataloader = DataLoader(val_dataset, batch_size=configs.batch_size, shuffle=False,
@@ -51,7 +52,7 @@ def create_test_dataloader(configs):
     """Create dataloader for testing phase"""
 
     test_dataset = KittiDataset(configs.dataset_dir, split='test', mode='test', aug_transforms=None, hflip_prob=0.,
-                                multiscale=False, num_samples=configs.num_samples)
+                                multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
     test_sampler = None
     if configs.distributed:
         test_sampler = torch.utils.data.distributed.DistributedSampler(test_dataset)
@@ -87,6 +88,10 @@ if __name__ == '__main__':
                         help='Number of threads for loading data')
     parser.add_argument('--batch_size', type=int, default=1,
                         help='mini-batch size (default: 1)')
+    parser.add_argument('--mosaic', action='store_true',
+                        help='If true, compose training samples as mosaics')
+    parser.add_argument('--random-padding', action='store_true',
+                        help='If true, random padding if using mosaic augmentation')
 
     configs = edict(vars(parser.parse_args()))
     configs.distributed = False  # For testing
