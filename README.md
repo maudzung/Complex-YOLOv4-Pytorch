@@ -15,7 +15,8 @@ The PyTorch Implementation based on YOLOv4 of the paper: [Complex-YOLO: Real-tim
 - [x] Realtime 3D object detection based on YOLOv4
 - [x] [Distributed Data Parallel Training](https://github.com/pytorch/examples/tree/master/distributed/ddp)
 - [x] TensorboardX
-- [ ] Try to use [CIoU](https://arxiv.org/pdf/1911.08287.pdf) / [GIoU](https://arxiv.org/pdf/1902.09630v2.pdf) loss for optimization.
+- [x] Mosaic augmentation for training
+- [ ] Use [CIoU](https://arxiv.org/pdf/1911.08287.pdf) / [GIoU](https://arxiv.org/pdf/1902.09630v2.pdf) loss for optimization.
 
 ## 2. Getting Started
 ### 2.1. Requirement
@@ -59,7 +60,25 @@ and [the Pytorch implementation](https://github.com/Tianxiaomo/pytorch-YOLOv4) w
 
 ```shell script
 cd src/data_process
-python kitti_dataloader.py --batch_size 1 --num_workers 1
+```
+
+- To visualize BEV maps and camera images (with 3D boxes), let's execute _**(the `output-width` param can be changed to 
+show a bigger output window)**_:
+
+```shell script
+python kitti_dataloader.py --output-width 608
+```
+
+- To visualize mosaics that are composed from 4 BEV maps (Using during training only), let's execute:
+
+```shell script
+python kitti_dataloader.py --show-train-data --mosaic --output-width 608 
+```
+
+By default, there is _**no padding**_ for the output mosaics, the feature could be activated by executing:
+
+```shell script
+python kitti_dataloader.py --show-train-data --mosaic --random-padding --output-width 608 
 ```
 
 #### 2.4.2. Inference
@@ -129,7 +148,7 @@ The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 will b
 
 |   |Backbone   | Detector   |
 |---|---|---|
-|**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) |[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random traing shapes <br>   |
+|**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) <br> [x] Mosaic augmentation|[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random traing shapes <br>   |
 |**BoS**   |[x] Mish activation <br> [x] Cross-stage partial connections (CSP) <br> [x] Multi-input weighted residual connections (MiWRC)   |[x] Mish activation <br> [x] SPP-block <br> [x] SAM-block <br> [x] PAN path-aggregation block <br> [ ] CIoU/GIoU loss |
 
 
