@@ -92,6 +92,10 @@ if __name__ == '__main__':
                         help='If true, compose training samples as mosaics')
     parser.add_argument('--random-padding', action='store_true',
                         help='If true, random padding if using mosaic augmentation')
+    parser.add_argument('--show-train-data', action='store_true',
+                        help='If true, random padding if using mosaic augmentation')
+    parser.add_argument('--output-width', type=int, default=608,
+                        help='the width of showing output, the height maybe vary')
 
     configs = edict(vars(parser.parse_args()))
     configs.distributed = False  # For testing
@@ -102,12 +106,15 @@ if __name__ == '__main__':
     print('len train_dataloader: {}, val_dataloader: {}'.format(len(train_dataloader), len(val_dataloader)))
     print('\n\nPress n to see the next sample >>> Press Esc to quit...')
 
-    for batch_i, (img_files, imgs, targets) in enumerate(val_dataloader):
-        img_file = img_files[0]
-        img_rgb = cv2.imread(img_file)
-        calib = kitti_data_utils.Calibration(img_file.replace(".png", ".txt").replace("image_2", "calib"))
-        objects_pred = invert_target(targets[:, 1:], calib, img_rgb.shape, RGB_Map=None)
-        img_rgb = show_image_with_boxes(img_rgb, objects_pred, calib, False)
+    dataloader = train_dataloader if configs.show_train_data else val_dataloader
+
+    for batch_i, (img_files, imgs, targets) in enumerate(dataloader):
+        if not (configs.mosaic and configs.show_train_data):
+            img_file = img_files[0]
+            img_rgb = cv2.imread(img_file)
+            calib = kitti_data_utils.Calibration(img_file.replace(".png", ".txt").replace("image_2", "calib"))
+            objects_pred = invert_target(targets[:, 1:], calib, img_rgb.shape, RGB_Map=None)
+            img_rgb = show_image_with_boxes(img_rgb, objects_pred, calib, False)
 
         # Rescale target
         targets[:, 2:6] *= configs.img_size
@@ -124,8 +131,11 @@ if __name__ == '__main__':
 
         img_bev = cv2.flip(cv2.flip(img_bev, 0), 1)
 
-        out_img = merge_rgb_to_bev(img_rgb, img_bev, output_width=608)
-        cv2.imshow('sample_img', out_img)
+        if configs.mosaic and configs.show_train_data:
+            cv2.imshow('mosaic_sample', img_bev)
+        else:
+            out_img = merge_rgb_to_bev(img_rgb, img_bev, output_width=configs.output_width)
+            cv2.imshow('single_sample', out_img)
 
         if cv2.waitKey(0) & 0xff == 27:
             break
