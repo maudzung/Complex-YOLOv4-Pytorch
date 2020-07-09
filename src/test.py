@@ -33,7 +33,7 @@ from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev
 
 def parse_test_configs():
     parser = argparse.ArgumentParser(description='Demonstration config for Complex YOLO Implementation')
-    parser.add_argument('--saved_fn', type=str, default='complexer_yolo', metavar='FN',
+    parser.add_argument('--saved_fn', type=str, default='complexer_yolov4', metavar='FN',
                         help='The name using for saving logs, models,...')
     parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
@@ -51,24 +51,24 @@ def parse_test_configs():
                         help='the size of input image')
     parser.add_argument('--num_samples', type=int, default=None,
                         help='Take a subset of the dataset to run and debug')
-    parser.add_argument('--num_workers', type=int, default=4,
+    parser.add_argument('--num_workers', type=int, default=1,
                         help='Number of threads for loading data')
-    parser.add_argument('--batch_size', type=int, default=4,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='mini-batch size (default: 4)')
 
-    parser.add_argument('--conf_thresh', type=float, default=0.5,
+    parser.add_argument('--conf_thresh', type=float, default=0.9,
                         help='the threshold for conf')
-    parser.add_argument('--nms_thresh', type=float, default=0.7,
+    parser.add_argument('--nms_thresh', type=float, default=0.1,
                         help='the threshold for conf')
 
-    parser.add_argument('--video_path', type=str, default=None, metavar='PATH',
-                        help='the path of the video that needs to demo')
-    parser.add_argument('--output_format', type=str, default='text', metavar='PATH',
-                        help='the type of the demo output')
     parser.add_argument('--show_image', action='store_true',
                         help='If true, show the image during demostration')
-    parser.add_argument('--save_demo_output', action='store_true',
-                        help='If true, the image of demonstration phase will be saved')
+    parser.add_argument('--save_test_output', action='store_true',
+                        help='If true, the output image of the testing phase will be saved')
+    parser.add_argument('--output_format', type=str, default='image', metavar='PATH',
+                        help='the type of the test output (support image or video)')
+    parser.add_argument('--output_video_fn', type=str, default='out_complexer_yolov4', metavar='PATH',
+                        help='the video filename if the output format is video')
 
     configs = edict(vars(parser.parse_args()))
     configs.pin_memory = True
@@ -79,9 +79,9 @@ def parse_test_configs():
     configs.working_dir = '../'
     configs.dataset_dir = os.path.join(configs.working_dir, 'dataset', 'kitti')
 
-    configs.checkpoints_dir = os.path.join(configs.working_dir, 'checkpoints', configs.saved_fn)
-    configs.results_dir = os.path.join(configs.working_dir, 'results', configs.saved_fn)
-    make_folder(configs.results_dir)
+    if configs.save_test_output:
+        configs.results_dir = os.path.join(configs.working_dir, 'results', configs.saved_fn)
+        make_folder(configs.results_dir)
 
     return configs
 
@@ -92,25 +92,26 @@ if __name__ == '__main__':
 
     model = create_model(configs)
     model.print_network()
-    assert os.path.isfile(configs.pretrained_path)
-    model.load_weights(configs.pretrained_path)
-    # model.load_state_dict(torch.load(configs.pretrained_path))
+    print('\n\n' + '-*=' * 30 + '\n\n')
+    assert os.path.isfile(configs.pretrained_path), "No file at {}".format(configs.pretrained_path)
+    # model.load_weights(configs.pretrained_path)
+    model.load_state_dict(torch.load(configs.pretrained_path))
 
     configs.device = torch.device('cpu' if configs.no_cuda else 'cuda:{}'.format(configs.gpu_idx))
     model = model.to(device=configs.device)
+
+    out_cap = None
 
     model.eval()
 
     test_dataloader = create_test_dataloader(configs)
     with torch.no_grad():
         for batch_idx, (img_paths, imgs_bev) in enumerate(test_dataloader):
-            print('batch_idx: {}'.format(batch_idx))
             input_imgs = imgs_bev.to(device=configs.device).float()
             t1 = time_synchronized()
-            detections = model(input_imgs)
+            outputs = model(input_imgs)
             t2 = time_synchronized()
-            print('outputs size: {}'.format(detections))
-            detections = post_processing(detections, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
+            detections = post_processing(outputs, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
 
             img_detections = []  # Stores detections for each image index
             img_detections.extend(detections)
@@ -137,9 +138,31 @@ if __name__ == '__main__':
             img_bev = cv2.flip(cv2.flip(img_bev, 0), 1)
 
             out_img = merge_rgb_to_bev(img_rgb, img_bev, output_width=608)
-            cv2.imshow('test-img', out_img)
 
-            print('Done testing the {} sample, time: {}ms'.format(batch_idx, (t2 - t1) * 1000))
+            print('\tDone testing the {}th sample, time: {:.1f}ms, speed {:.2f}FPS'.format(batch_idx, (t2 - t1) * 1000,
+                                                                                           1 / (t2 - t1)))
 
-            if cv2.waitKey(0) & 0xFF == 27:
-                break
+            if configs.save_test_output:
+                if configs.output_format == 'image':
+                    img_fn = os.path.basename(img_paths[0])[:-4]
+                    cv2.imwrite(os.path.join(configs.results_dir, '{}.jpg'.format(img_fn)), out_img)
+                elif configs.output_format == 'video':
+                    if out_cap is None:
+                        out_cap_h, out_cap_w = out_img.shape[:2]
+                        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                        out_cap = cv2.VideoWriter(
+                            os.path.join(configs.results_dir, '{}.avi'.format(configs.output_video_fn)),
+                            fourcc, 30, (out_cap_w, out_cap_h))
+
+                    out_cap.write(out_img)
+                else:
+                    raise TypeError
+
+            if configs.show_image:
+                cv2.imshow('test-img', out_img)
+                print('\n[INFO] Press n to see the next sample >>> Press Esc to quit...\n')
+                if cv2.waitKey(0) & 0xFF == 27:
+                    break
+    if out_cap:
+        out_cap.release()
+    cv2.destroyAllWindows()
