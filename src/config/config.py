@@ -43,6 +43,10 @@ def parse_configs():
                         help='the size of input image')
     parser.add_argument('--multiscale_training', action='store_true',
                         help='If true, use scaling data for training')
+    parser.add_argument('--mosaic', action='store_true',
+                        help='If true, compose training samples as mosaics')
+    parser.add_argument('--random-padding', action='store_true',
+                        help='If true, random padding if using mosaic augmentation')
     parser.add_argument('--no-val', action='store_true',
                         help='If true, dont evaluate the model on the val set')
     parser.add_argument('--num_samples', type=int, default=None,
