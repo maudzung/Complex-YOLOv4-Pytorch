@@ -74,14 +74,14 @@ class KittiDataset(Dataset):
 
     def __getitem__(self, index):
         if self.is_test:
-            return self.load_img_targets(index)
+            return self.load_img_only(index)
         else:
             if self.mosaic:
                 img_files, rgb_map, targets = self.load_mosaic(index)
                 rgb_map = torch.from_numpy(rgb_map).float()
                 return img_files[0], rgb_map, torch.from_numpy(targets).float()
             else:
-                img_file, rgb_map, targets = self.load_img_targets(index)
+                img_file, rgb_map, targets = self.load_img_with_targets(index)
                 rgb_map = torch.from_numpy(rgb_map).float()
 
                 if self.hflip_transform is not None:
@@ -100,7 +100,7 @@ class KittiDataset(Dataset):
 
         indices = [index] + [random.randint(0, self.num_samples - 1) for _ in range(3)]  # 3 additional image indices
         for i, index in enumerate(indices):
-            img_file, img, targets = self.load_img_targets(index)
+            img_file, img, targets = self.load_img_with_targets(index)
             img_file_s4.append(img_file)
 
             c, h, w = img.shape  # (3, 608, 608), numpy array
@@ -139,46 +139,47 @@ class KittiDataset(Dataset):
 
         return img_file_s4, img4, targets_s4
 
-    def load_img_targets(self, index):
+    def load_img_only(self, index):
+        sample_id = int(self.sample_id_list[index])
+        lidarData = self.get_lidar(sample_id)
+        b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
+        rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
+        img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
+
+        return img_file, rgb_map
+
+    def load_img_with_targets(self, index):
         sample_id = int(self.sample_id_list[index])
 
-        if not self.is_test:
-            lidarData = self.get_lidar(sample_id)
-            objects = self.get_label(sample_id)
-            calib = self.get_calib(sample_id)
+        lidarData = self.get_lidar(sample_id)
+        objects = self.get_label(sample_id)
+        calib = self.get_calib(sample_id)
 
-            labels, noObjectLabels = kitti_bev_utils.read_labels_for_bevbox(objects)
+        labels, noObjectLabels = kitti_bev_utils.read_labels_for_bevbox(objects)
 
-            if not noObjectLabels:
-                labels[:, 1:] = transformation.camera_to_lidar_box(labels[:, 1:], calib.V2C, calib.R0,
-                                                                   calib.P)  # convert rect cam to velo cord
+        if not noObjectLabels:
+            labels[:, 1:] = transformation.camera_to_lidar_box(labels[:, 1:], calib.V2C, calib.R0,
+                                                               calib.P)  # convert rect cam to velo cord
 
-            if self.aug_transforms is not None:
-                lidarData, labels[:, 1:] = self.aug_transforms(lidarData, labels[:, 1:])
+        if self.aug_transforms is not None:
+            lidarData, labels[:, 1:] = self.aug_transforms(lidarData, labels[:, 1:])
 
-            b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
-            rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
-            target = kitti_bev_utils.build_yolo_target(labels)
-            img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
+        b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
+        rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
+        target = kitti_bev_utils.build_yolo_target(labels)
+        img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
-            ntargets = 0
-            for i, t in enumerate(target):
-                if t.sum(0):
-                    ntargets += 1
-            # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
-            targets = np.zeros((ntargets, 8))
-            for i, t in enumerate(target):
-                if t.sum(0):
-                    targets[i, 1:] = t
+        ntargets = 0
+        for i, t in enumerate(target):
+            if t.sum(0):
+                ntargets += 1
+        # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
+        targets = np.zeros((ntargets, 8))
+        for i, t in enumerate(target):
+            if t.sum(0):
+                targets[i, 1:] = t
 
-            return img_file, rgb_map, targets
-
-        else:
-            lidarData = self.get_lidar(sample_id)
-            b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
-            rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
-            img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
-            return img_file, rgb_map
+        return img_file, rgb_map, targets
 
     def __len__(self):
         return len(self.sample_id_list)
