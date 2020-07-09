@@ -8,6 +8,7 @@ import sys
 import math
 
 import numpy as np
+import torch
 
 sys.path.append('../')
 
@@ -301,39 +302,6 @@ def box_transform(boxes, tx, ty, tz, r=0, coordinate='lidar'):
     return corner_to_center_box3d(boxes_corner, coordinate=coordinate)
 
 
-def complex_yolo_pc_augmentation(lidar, labels, augData):
-    np.random.seed()
-
-    gt_box3d = labels  # (N', 7) x, y, z, h, w, l, r; camera coordinates
-
-    '''
-    Randomly choose between 0-2, equal probability
-    0: Rotation
-    1: Scaling
-    2: No augmentation
-    '''
-
-    choice = np.random.randint(low=0, high=3)
-
-    if augData and choice == 0:
-        # global rotation
-        angle = np.random.uniform(-0.35, 0.35, )  # (-20, 20) degree
-        lidar[:, 0:3] = point_transform(lidar[:, 0:3], 0, 0, 0, rz=angle)
-        lidar_center_gt_box3d = gt_box3d
-        lidar_center_gt_box3d = box_transform(lidar_center_gt_box3d, 0, 0, 0, r=angle, coordinate='lidar')
-
-    elif augData and choice == 1:
-        # global scaling
-        factor = np.random.uniform(0.95, 1.05)
-        lidar[:, 0:3] = lidar[:, 0:3] * factor
-        lidar_center_gt_box3d = gt_box3d
-        lidar_center_gt_box3d[:, 0:6] = lidar_center_gt_box3d[:, 0:6] * factor
-    else:
-        lidar_center_gt_box3d = gt_box3d
-
-    return lidar, lidar_center_gt_box3d
-
-
 def inverse_rigid_trans(Tr):
     ''' Inverse a rigid body transform matrix (3x4 as [R|t])
         [R'|-R't; 0|1]
@@ -342,3 +310,77 @@ def inverse_rigid_trans(Tr):
     inv_Tr[0:3, 0:3] = np.transpose(Tr[0:3, 0:3])
     inv_Tr[0:3, 3] = np.dot(-np.transpose(Tr[0:3, 0:3]), Tr[0:3, 3])
     return inv_Tr
+
+
+class Compose(object):
+    def __init__(self, transforms, p=1.0):
+        self.transforms = transforms
+        self.p = p
+
+    def __call__(self, lidar, labels):
+        if np.random.random() <= self.p:
+            for t in self.transforms:
+                lidar, labels = t(lidar, labels)
+        return lidar, labels
+
+
+class OneOf(object):
+    def __init__(self, transforms, p=1.0):
+        self.transforms = transforms
+        self.p = p
+
+    def __call__(self, lidar, labels):
+        if np.random.random() <= self.p:
+            choice = np.random.randint(low=0, high=len(self.transforms))
+            lidar, labels = self.transforms[choice](lidar, labels)
+
+        return lidar, labels
+
+
+class Random_Rotation(object):
+    def __init__(self, limit_angle=20., p=0.5):
+        self.limit_angle = limit_angle / 180. * np.pi
+        self.p = p
+
+    def __call__(self, lidar, labels):
+        """
+        :param labels: # (N', 7) x, y, z, h, w, l, r
+        :return:
+        """
+        if np.random.random() <= self.p:
+            angle = np.random.uniform(-self.limit_angle, self.limit_angle)
+            lidar[:, 0:3] = point_transform(lidar[:, 0:3], 0, 0, 0, rz=angle)
+            labels = box_transform(labels, 0, 0, 0, r=angle, coordinate='lidar')
+
+        return lidar, labels
+
+
+class Random_Scaling(object):
+    def __init__(self, scaling_range=(0.95, 1.05), p=0.5):
+        self.scaling_range = scaling_range
+        self.p = p
+
+    def __call__(self, lidar, labels):
+        """
+        :param labels: # (N', 7) x, y, z, h, w, l, r
+        :return:
+        """
+        if np.random.random() <= self.p:
+            factor = np.random.uniform(self.scaling_range[0], self.scaling_range[0])
+            lidar[:, 0:3] = lidar[:, 0:3] * factor
+            labels[:, 0:6] = labels[:, 0:6] * factor
+
+        return lidar, labels
+
+
+class Horizontal_Flip(object):
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, img, targets):
+        if np.random.random() <= self.p:
+            img = torch.flip(img, [-1])
+            targets[:, 2] = 1 - targets[:, 2]  # horizontal flip
+            targets[:, 6] = - targets[:, 6]  # yaw angle flip
+
+        return img, targets

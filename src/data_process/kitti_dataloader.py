@@ -16,12 +16,18 @@ from torch.utils.data import DataLoader
 sys.path.append('../')
 
 from data_process.kitti_dataset import KittiDataset
+from data_process.transformation import OneOf, Random_Rotation, Random_Scaling
 
 
 def create_train_val_dataloader(configs):
     """Create dataloader for training and validate"""
-    train_dataset = KittiDataset(configs.dataset_dir, split='train', mode='train', data_aug=True,
-                                 multiscale=configs.multiscale_training, num_samples=configs.num_samples)
+    train_aug_transforms = OneOf([
+        Random_Rotation(limit_angle=20., p=1.0),
+        Random_Scaling(scaling_range=(0.95, 1.05), p=1.0)
+    ], p=0.6)
+    train_dataset = KittiDataset(configs.dataset_dir, split='train', mode='train', aug_transforms=train_aug_transforms,
+                                 hflip_prob=0.5, multiscale=configs.multiscale_training,
+                                 num_samples=configs.num_samples)
     train_sampler = None
     if configs.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -30,8 +36,8 @@ def create_train_val_dataloader(configs):
                                   collate_fn=train_dataset.collate_fn)
 
     val_sampler = None
-    val_dataset = KittiDataset(configs.dataset_dir, split='val', mode='val', data_aug=False, multiscale=False,
-                               num_samples=configs.num_samples)
+    val_dataset = KittiDataset(configs.dataset_dir, split='val', mode='val', aug_transforms=None, hflip_prob=0.,
+                               multiscale=False, num_samples=configs.num_samples)
     if configs.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
     val_dataloader = DataLoader(val_dataset, batch_size=configs.batch_size, shuffle=False,
@@ -44,7 +50,7 @@ def create_train_val_dataloader(configs):
 def create_test_dataloader(configs):
     """Create dataloader for testing phase"""
 
-    test_dataset = KittiDataset(configs.dataset_dir, split='test', mode='test', data_aug=False,
+    test_dataset = KittiDataset(configs.dataset_dir, split='test', mode='test', aug_transforms=None, hflip_prob=0.,
                                 multiscale=False, num_samples=configs.num_samples)
     test_sampler = None
     if configs.distributed:
