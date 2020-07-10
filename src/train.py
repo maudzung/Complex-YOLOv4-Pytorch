@@ -22,12 +22,12 @@ from utils.train_utils import create_optimizer, create_lr_scheduler, get_saved_s
 from utils.train_utils import reduce_tensor, to_python_float, get_tensorboard_log
 from utils.misc import AverageMeter, ProgressMeter
 from utils.logger import Logger
-from config.config import parse_configs
+from config.train_config import parse_train_configs
 from evaluate import evaluate_mAP
 
 
 def main():
-    configs = parse_configs()
+    configs = parse_train_configs()
 
     # Re-produce results
     if configs.seed is not None:

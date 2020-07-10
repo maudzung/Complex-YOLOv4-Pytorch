@@ -10,17 +10,12 @@
 
 import os
 import argparse
-import sys
 
 import torch
 from easydict import EasyDict as edict
 
-sys.path.append('../')
 
-from utils.misc import make_folder
-
-
-def parse_configs():
+def parse_train_configs():
     parser = argparse.ArgumentParser(description='The Implementation of Complex YOLOv4')
     parser.add_argument('--seed', type=int, default=2020,
                         help='re-produce the results with seed random')
@@ -28,7 +23,7 @@ def parse_configs():
                         help='The name using for saving logs, models,...')
 
     parser.add_argument('--working-dir', type=str, default='../', metavar='PATH',
-                        help='the path of the pretrained checkpoint')
+                        help='The ROOT working directory')
     ####################################################################
     ##############     Model configs            ########################
     ####################################################################
@@ -146,7 +141,9 @@ def parse_configs():
     configs.checkpoints_dir = os.path.join(configs.working_dir, 'checkpoints', configs.saved_fn)
     configs.logs_dir = os.path.join(configs.working_dir, 'logs', configs.saved_fn)
 
-    make_folder(configs.checkpoints_dir)
-    make_folder(configs.logs_dir)
+    if not os.path.isdir(configs.checkpoints_dir):
+        os.makedirs(configs.checkpoints_dir)
+    if not os.path.isdir(configs.logs_dir):
+        os.makedirs(configs.logs_dir)
 
     return configs
