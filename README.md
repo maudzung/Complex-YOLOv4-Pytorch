@@ -63,7 +63,7 @@ cd src/data_process
 ```
 
 - To visualize BEV maps and camera images (with 3D boxes), let's execute _**(the `output-width` param can be changed to 
-show a bigger output window)**_:
+show the images in a bigger/smaller window)**_:
 
 ```shell script
 python kitti_dataloader.py --output-width 608
@@ -84,7 +84,7 @@ python kitti_dataloader.py --show-train-data --mosaic --random-padding --output-
 #### 2.4.2. Inference
 
 ```shell script
-python test.py --gpu_idx 0 --pretrained_path <paths>
+python test.py --gpu_idx 0 --pretrained_path <PATH>...
 ```
 
 The trained model will be provided soon. Please watch the repo to get notifications for next update.
@@ -94,7 +94,7 @@ The trained model will be provided soon. Please watch the repo to get notificati
 ##### 2.4.3.1. Single machine, single gpu
 
 ```shell script
-python train.py --gpu_idx 0 --multiscale_training
+python train.py --gpu_idx 0 --multiscale_training --batch_size <N> --num_workers <N>...
 ```
 
 ##### 2.4.3.2. Multi-processing Distributed Data Parallel Training
@@ -126,10 +126,10 @@ To reproduce the results, you can run the bash shell script
 ./train.sh
 ```
 
-### 2.5. Evaluation
+### 2.4.4. Evaluation
 
 ```shell script
-python eval_mAP.py
+python evaluate.py ----gpu_idx 0 --pretrained_path <PATH> --img_size <SIZE> --conf-thresh <THRESH> --nms-thresh <THRESH> --iou-thresh <THRESH>...
 ```
 
 The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 will be updated soon. 
@@ -143,12 +143,12 @@ The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 will b
 | Complex-YOLO-v4         |    |       |    |    |
 
 
-### 2.6. List of usage for Bag of Freebies (BoF) & Bag of Specials (BoS) in this implementation
+### 2.5. List of usage for Bag of Freebies (BoF) & Bag of Specials (BoS) in this implementation
 
 
 |   |Backbone   | Detector   |
 |---|---|---|
-|**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) <br> [x] Mosaic augmentation|[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random traing shapes <br>   |
+|**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) <br> [x] Mosaic augmentation|[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random training shapes <br>   |
 |**BoS**   |[x] Mish activation <br> [x] Cross-stage partial connections (CSP) <br> [x] Multi-input weighted residual connections (MiWRC)   |[x] Mish activation <br> [x] SPP-block <br> [x] SAM-block <br> [x] PAN path-aggregation block <br> [ ] CIoU/GIoU loss |
 
 
@@ -183,50 +183,77 @@ Thank you!
 ```
 ${ROOT}   
 └── dataset/    
-    └── kitti
+    └── kitti/
         ├──ImageSets/
-        |   ├── train.txt
-        |   ├── val.txt
+        │   ├── train.txt
+        │   └── val.txt
         ├── training/
-        |   ├── image_2/ <-- for visualization
-        |   ├── calib/
-        |   ├── label_2/
-        |   ├── velodyne/
+        │   ├── image_2/ <-- for visualization
+        │   ├── calib/
+        │   ├── label_2/
+        │   └── velodyne/
         └── testing/  
-        |   ├── image_2/ <-- for visualization
-        |   ├── calib/
-        |   ├── velodyne/ 
+        │   ├── image_2/ <-- for visualization
+        │   ├── calib/
+        │   └── velodyne/ 
+        └── classes_names.txt
 └── src/
-    └── config/
-    └── data_process/
-    └── models/
+    ├── config/
+    │   ├── complex_yolov4.cfg
+    │   ├── complex_yolov4-tiny.cfg
+    │   ├── config.py
+    │   └── kitti_config.py
+    ├── data_process/
+    │   ├── kitti_bev_utils.py
+    │   ├── kitti_dataloader.py
+    │   ├── kitti_dataset.py
+    │   ├── kitti_data_utils.py
+    │   ├── train_val_split.py
+    │   └── transformation.py
+    ├── models/
+    │   ├── darknet2pytorch.py
+    │   ├── darknet_utils.py
+    │   ├── model_utils.py
+    │   ├── region_loss.py
+    │   ├── yolo_layer.py
+    │   └── yolov4_model.py
     └── utils/
-    └── demo.py
-    └── eval_mAP.py
-    └── test.py
-    └── train.py
+    │   ├── detection_utils.py
+    │   ├── evaluation_utils.py
+    │   ├── iou_utils.py
+    │   ├── logger.py
+    │   ├── misc.py
+    │   ├── prediction_utils.py
+    │   ├── torch_utils.py
+    │   ├── train_utils.py
+    │   └── visualization_utils.py
+    ├── evaluate.py
+    ├── test.py
+    ├── test.sh
+    ├── train.py
     └── train.sh
 ├── README.md 
-├── requirements.txt
+└── requirements.txt
 ```
 
 ## Usage
 
 ```
-usage: train.py [-h] [--seed SEED] [--saved_fn FN] [-a ARCH] [--cfgfile PATH]
-                [--pretrained_path PATH] [--img_size IMG_SIZE]
-                [--multiscale_training] [--no-val] [--num_samples NUM_SAMPLES]
+usage: train.py [-h] [--seed SEED] [--saved_fn FN] [--working-dir PATH]
+                [-a ARCH] [--cfgfile PATH] [--pretrained_path PATH]
+                [--img_size IMG_SIZE] [--multiscale_training] [--mosaic]
+                [--random-padding] [--no-val] [--num_samples NUM_SAMPLES]
                 [--num_workers NUM_WORKERS] [--batch_size BATCH_SIZE]
                 [--subdivisions SUBDIVISIONS] [--print_freq N]
                 [--tensorboard_freq N] [--checkpoint_freq N] [--start_epoch N]
                 [--num_epochs N] [--lr LR] [--minimum_lr MIN_LR]
                 [--momentum M] [-wd WD] [--optimizer_type OPTIMIZER]
-                [--lr_type SCHEDULER] [--burn_in N]
-                [--steps [STEPS [STEPS ...]]] [--world-size N] [--rank N]
-                [--dist-url DIST_URL] [--dist-backend DIST_BACKEND]
+                [--burn_in N] [--steps [STEPS [STEPS ...]]] [--world-size N]
+                [--rank N] [--dist-url DIST_URL] [--dist-backend DIST_BACKEND]
                 [--gpu_idx GPU_IDX] [--no_cuda]
                 [--multiprocessing-distributed] [--evaluate]
-                [--resume_path PATH]
+                [--resume_path PATH] [--conf-thresh CONF_THRESH]
+                [--nms-thresh NMS_THRESH] [--iou-thresh IOU_THRESH]
 
 The Implementation of Complex YOLOv4
 
@@ -234,6 +261,7 @@ optional arguments:
   -h, --help            show this help message and exit
   --seed SEED           re-produce the results with seed random
   --saved_fn FN         The name using for saving logs, models,...
+  --working-dir PATH    The ROOT working directory
   -a ARCH, --arch ARCH  The name of the model architecture
   --cfgfile PATH        The path for cfgfile (only for darknet)
   --pretrained_path PATH
@@ -241,20 +269,22 @@ optional arguments:
   --img_size IMG_SIZE   the size of input image
   --multiscale_training
                         If true, use scaling data for training
+  --mosaic              If true, compose training samples as mosaics
+  --random-padding      If true, random padding if using mosaic augmentation
   --no-val              If true, dont evaluate the model on the val set
   --num_samples NUM_SAMPLES
                         Take a subset of the dataset to run and debug
   --num_workers NUM_WORKERS
                         Number of threads for loading data
   --batch_size BATCH_SIZE
-                        mini-batch size (default: 64), this is the totalbatch
+                        mini-batch size (default: 4), this is the totalbatch
                         size of all GPUs on the current node when usingData
                         Parallel or Distributed Data Parallel
   --subdivisions SUBDIVISIONS
                         subdivisions during training
-  --print_freq N        print frequency (default: 10)
-  --tensorboard_freq N  frequency of saving tensorboard (default: 10)
-  --checkpoint_freq N   frequency of saving checkpoints (default: 3)
+  --print_freq N        print frequency (default: 50)
+  --tensorboard_freq N  frequency of saving tensorboard (default: 20)
+  --checkpoint_freq N   frequency of saving checkpoints (default: 2)
   --start_epoch N       the starting epoch
   --num_epochs N        number of total epochs to run
   --lr LR               initial learning rate
@@ -264,8 +294,6 @@ optional arguments:
                         weight decay (default: 1e-6)
   --optimizer_type OPTIMIZER
                         the type of optimizer, it can be sgd or adam
-  --lr_type SCHEDULER   the type of the learning rate scheduler (steplr or
-                        ReduceonPlateau)
   --burn_in N           number of burn in step
   --steps [STEPS [STEPS ...]]
                         number of burn in step
@@ -283,9 +311,15 @@ optional arguments:
                         multi node data parallel training
   --evaluate            only evaluate the model, not training
   --resume_path PATH    the path of the resumed checkpoint
+  --conf-thresh CONF_THRESH
+                        for evaluation - the threshold for class conf
+  --nms-thresh NMS_THRESH
+                        for evaluation - the threshold for nms
+  --iou-thresh IOU_THRESH
+                        for evaluation - the threshold for IoU
 ```
 
-[python-image]: https://img.shields.io/badge/Python-3.x-ff69b4.svg
+[python-image]: https://img.shields.io/badge/Python-3.6-ff69b4.svg
 [python-url]: https://www.python.org/
 [pytorch-image]: https://img.shields.io/badge/PyTorch-1.5-2BAF2B.svg
 [pytorch-url]: https://pytorch.org/
