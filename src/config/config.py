@@ -26,6 +26,9 @@ def parse_configs():
                         help='re-produce the results with seed random')
     parser.add_argument('--saved_fn', type=str, default='complexer_yolo', metavar='FN',
                         help='The name using for saving logs, models,...')
+
+    parser.add_argument('--working-dir', type=str, default='../', metavar='PATH',
+                        help='the path of the pretrained checkpoint')
     ####################################################################
     ##############     Model configs            ########################
     ####################################################################
@@ -119,6 +122,12 @@ def parse_configs():
                         help='only evaluate the model, not training')
     parser.add_argument('--resume_path', type=str, default=None, metavar='PATH',
                         help='the path of the resumed checkpoint')
+    parser.add_argument('--conf-thresh', type=float, default=0.5,
+                        help='for evaluation - the threshold for class conf')
+    parser.add_argument('--nms-thresh', type=float, default=0.5,
+                        help='for evaluation - the threshold for nms')
+    parser.add_argument('--iou-thresh', type=float, default=0.5,
+                        help='for evaluation - the threshold for IoU')
 
     configs = edict(vars(parser.parse_args()))
 
@@ -133,7 +142,6 @@ def parse_configs():
     ####################################################################
     ############## Dataset, logs, Checkpoints dir ######################
     ####################################################################
-    configs.working_dir = '../'
     configs.dataset_dir = os.path.join(configs.working_dir, 'dataset', 'kitti')
     configs.checkpoints_dir = os.path.join(configs.working_dir, 'checkpoints', configs.saved_fn)
     configs.logs_dir = os.path.join(configs.working_dir, 'logs', configs.saved_fn)

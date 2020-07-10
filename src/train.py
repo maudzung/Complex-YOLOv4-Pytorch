@@ -23,7 +23,7 @@ from utils.train_utils import reduce_tensor, to_python_float, get_tensorboard_lo
 from utils.misc import AverageMeter, ProgressMeter
 from utils.logger import Logger
 from config.config import parse_configs
-from utils.evaluation_utils import post_processing, get_batch_statistics_rotated_bbox, ap_per_class
+from evaluate import evaluate_mAP
 
 
 def main():
@@ -130,8 +130,7 @@ def main_worker(gpu_idx, configs):
 
     if configs.evaluate:
         assert val_loader is not None, "The validation should not be None"
-        eval_metrics = evaluate_one_epoch(val_loader, model, configs.start_epoch - 1, configs, logger)
-        precision, recall, AP, f1, ap_class = eval_metrics
+        precision, recall, AP, f1, ap_class = evaluate_mAP(val_loader, model, configs, None)
         print('Evaluate - precision: {}, recall: {}, AP: {}, f1: {}, ap_class: {}'.format(precision, recall, AP, f1,
                                                                                           ap_class))
         return
@@ -148,7 +147,7 @@ def main_worker(gpu_idx, configs):
         # train for one epoch
         train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer)
         if not configs.no_val:
-            precision, recall, AP, f1, ap_class = evaluate_one_epoch(val_loader, model, epoch, configs, logger)
+            precision, recall, AP, f1, ap_class = evaluate_mAP(val_loader, model, configs, logger)
             val_metrics_dict = {'precision': precision, 'recall': recall, 'AP': AP, 'f1': f1, 'ap_class': ap_class}
             if tb_writer is not None:
                 tb_writer.add_scalars('Validation', val_metrics_dict, epoch)
@@ -227,54 +226,6 @@ def train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs
                 logger.info(progress.get_message(batch_idx))
 
         start_time = time.time()
-
-
-def evaluate_one_epoch(val_loader, model, epoch, configs, logger):
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time = AverageMeter('Data', ':6.3f')
-
-    conf_thresh = 0.5
-    nms_thresh = 0.5
-    iou_threshold = 0.5
-
-    progress = ProgressMeter(len(val_loader), [batch_time, data_time],
-                             prefix="Evaluate - Epoch: [{}/{}]".format(epoch, configs.num_epochs))
-    labels = []
-    sample_metrics = []  # List of tuples (TP, confs, pred)
-    # switch to evaluate mode
-    model.eval()
-    with torch.no_grad():
-        start_time = time.time()
-        for batch_idx, batch_data in enumerate(tqdm(val_loader)):
-            data_time.update(time.time() - start_time)
-            _, imgs, targets = batch_data
-            # Extract labels
-            labels += targets[:, 1].tolist()
-            # Rescale target
-            targets[:, 2:] *= configs.img_size
-            imgs = imgs.to(configs.device, non_blocking=True)
-
-            outputs = model(imgs)
-            outputs = post_processing(outputs, conf_thresh=conf_thresh, nms_thresh=nms_thresh)
-
-            sample_metrics += get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold=iou_threshold)
-
-            # measure elapsed time
-            # torch.cuda.synchronize()
-            batch_time.update(time.time() - start_time)
-
-            # Log message
-            if logger is not None:
-                if ((batch_idx + 1) % configs.print_freq) == 0:
-                    logger.info(progress.get_message(batch_idx))
-
-            start_time = time.time()
-
-        # Concatenate sample statistics
-        true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
-        precision, recall, AP, f1, ap_class = ap_per_class(true_positives, pred_scores, pred_labels, labels)
-
-    return precision, recall, AP, f1, ap_class
 
 
 if __name__ == '__main__':
