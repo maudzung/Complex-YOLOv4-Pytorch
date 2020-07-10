@@ -2,6 +2,7 @@ dataset/
 logs/
 checkpoints/
 results/
+src/.idea/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
