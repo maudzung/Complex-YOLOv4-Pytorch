@@ -19,8 +19,9 @@ from data_process.kitti_dataset import KittiDataset
 from data_process.transformation import OneOf, Random_Rotation, Random_Scaling
 
 
-def create_train_val_dataloader(configs):
-    """Create dataloader for training and validate"""
+def create_train_dataloader(configs):
+    """Create dataloader for training"""
+
     train_aug_transforms = OneOf([
         Random_Rotation(limit_angle=20., p=1.0),
         Random_Scaling(scaling_range=(0.95, 1.05), p=1.0)
@@ -36,6 +37,12 @@ def create_train_val_dataloader(configs):
                                   pin_memory=configs.pin_memory, num_workers=configs.num_workers, sampler=train_sampler,
                                   collate_fn=train_dataset.collate_fn)
 
+    return train_dataloader, train_sampler
+
+
+def create_val_dataloader(configs):
+    """Create dataloader for validation"""
+
     val_sampler = None
     val_dataset = KittiDataset(configs.dataset_dir, split='val', mode='val', aug_transforms=None, hflip_prob=0.,
                                multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
@@ -45,7 +52,7 @@ def create_train_val_dataloader(configs):
                                 pin_memory=configs.pin_memory, num_workers=configs.num_workers, sampler=val_sampler,
                                 collate_fn=val_dataset.collate_fn)
 
-    return train_dataloader, val_dataloader, train_sampler
+    return val_dataloader
 
 
 def create_test_dataloader(configs):
@@ -102,11 +109,14 @@ if __name__ == '__main__':
     configs.pin_memory = True
     configs.dataset_dir = os.path.join('../../', 'dataset', 'kitti')
 
-    train_dataloader, val_dataloader, train_sampler = create_train_val_dataloader(configs)
-    print('len train_dataloader: {}, val_dataloader: {}'.format(len(train_dataloader), len(val_dataloader)))
-    print('\n\nPress n to see the next sample >>> Press Esc to quit...')
+    if configs.show_train_data:
+        dataloader, _ = create_train_dataloader(configs)
+        print('len train dataloader: {}'.format(len(dataloader)))
+    else:
+        dataloader = create_val_dataloader(configs)
+        print('len val dataloader: {}'.format(len(dataloader)))
 
-    dataloader = train_dataloader if configs.show_train_data else val_dataloader
+    print('\n\nPress n to see the next sample >>> Press Esc to quit...')
 
     for batch_i, (img_files, imgs, targets) in enumerate(dataloader):
         if not (configs.mosaic and configs.show_train_data):

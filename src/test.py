@@ -56,9 +56,9 @@ def parse_test_configs():
     parser.add_argument('--batch_size', type=int, default=1,
                         help='mini-batch size (default: 4)')
 
-    parser.add_argument('--conf_thresh', type=float, default=0.9,
+    parser.add_argument('--conf_thresh', type=float, default=0.5,
                         help='the threshold for conf')
-    parser.add_argument('--nms_thresh', type=float, default=0.1,
+    parser.add_argument('--nms_thresh', type=float, default=0.5,
                         help='the threshold for conf')
 
     parser.add_argument('--show_image', action='store_true',
@@ -94,7 +94,6 @@ if __name__ == '__main__':
     model.print_network()
     print('\n\n' + '-*=' * 30 + '\n\n')
     assert os.path.isfile(configs.pretrained_path), "No file at {}".format(configs.pretrained_path)
-    # model.load_weights(configs.pretrained_path)
     model.load_state_dict(torch.load(configs.pretrained_path))
 
     configs.device = torch.device('cpu' if configs.no_cuda else 'cuda:{}'.format(configs.gpu_idx))
@@ -123,7 +122,6 @@ if __name__ == '__main__':
                 if detections is None:
                     continue
                 # Rescale boxes to original image
-                detections = np.array(detections)
                 detections = rescale_boxes(detections, configs.img_size, img_bev.shape[:2])
                 for x, y, w, l, im, re, cls_conf, cls_pred in detections:
                     yaw = np.arctan2(im, re)

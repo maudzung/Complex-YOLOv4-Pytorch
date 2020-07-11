@@ -208,7 +208,7 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
                     continue
 
                 # iou, box_index = rotated_bbox_iou(pred_box.unsqueeze(0), target_boxes, 1.0, False).squeeze().max(0)
-                ious = rotated_bbox_iou_polygon(pred_box, target_boxes)
+                ious = rotated_bbox_iou_polygon_cpu(pred_box, target_boxes)
                 iou, box_index = torch.from_numpy(ious).max(0)
 
                 if iou >= iou_threshold and box_index not in detected_boxes:
@@ -264,6 +264,29 @@ def rotated_box_11_iou_polygon(box1, box2, nG):
 def rotated_bbox_iou_polygon(box1, box2):
     box1 = to_cpu(box1).numpy()
     box2 = to_cpu(box2).numpy()
+
+    x, y, w, l, im, re = box1
+    angle = np.arctan2(im, re)
+    bbox1 = np.array(bev_utils.get_corners(x, y, w, l, angle)).reshape(-1, 4, 2)
+    bbox1 = convert_format(bbox1)
+
+    bbox2 = []
+    for i in range(box2.shape[0]):
+        x, y, w, l, im, re = box2[i, :]
+        angle = np.arctan2(im, re)
+        bev_corners = bev_utils.get_corners(x, y, w, l, angle)
+        bbox2.append(bev_corners)
+    bbox2 = convert_format(np.array(bbox2))
+
+    return compute_iou(bbox1[0], bbox2)
+
+
+def rotated_bbox_iou_polygon_cpu(box1, box2):
+    """
+    :param box1: Numpy array
+    :param box2: Numpy array
+    :return:
+    """
 
     x, y, w, l, im, re = box1
     angle = np.arctan2(im, re)
@@ -367,7 +390,7 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
                     [l_box_array[j, 0], l_box_array[j, 1], l_box_array[j, 2], l_box_array[j, 3], l_box_array[j, 4],
                      l_box_array[j, 5], l_max_conf[j], l_max_id[j]])
         if len(bboxes) > 0:
-            bboxes_batch[i] = bboxes
+            bboxes_batch[i] = np.array(bboxes)
 
     return bboxes_batch
 
