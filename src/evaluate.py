@@ -14,7 +14,7 @@ from easydict import EasyDict as edict
 
 sys.path.append('./')
 
-from data_process.kitti_dataloader import create_train_val_dataloader
+from data_process.kitti_dataloader import create_val_dataloader
 from models.model_utils import create_model
 from utils.misc import AverageMeter, ProgressMeter
 from utils.evaluation_utils import post_processing, get_batch_statistics_rotated_bbox, ap_per_class, load_classes
@@ -84,9 +84,9 @@ def parse_eval_configs():
                         help='the size of input image')
     parser.add_argument('--num_samples', type=int, default=None,
                         help='Take a subset of the dataset to run and debug')
-    parser.add_argument('--num_workers', type=int, default=1,
+    parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of threads for loading data')
-    parser.add_argument('--batch_size', type=int, default=1,
+    parser.add_argument('--batch_size', type=int, default=4,
                         help='mini-batch size (default: 4)')
 
     parser.add_argument('--conf-thresh', type=float, default=0.5,
@@ -125,13 +125,13 @@ if __name__ == '__main__':
 
     model.eval()
     print('Create the validation dataloader')
-    _, val_loader, _ = create_train_val_dataloader(configs)
+    val_dataloader = create_val_dataloader(configs)
 
-    print("Start computing mAP...")
-    precision, recall, AP, f1, ap_class = evaluate_mAP(val_loader, model, configs, None)
-    print("Done computing mAP...")
-    print('precision: {}, recall: {}, AP: {}, f1: {}, ap_class: {}'.format(precision, recall, AP, f1, ap_class))
+    print("\nStart computing mAP...\n")
+    precision, recall, AP, f1, ap_class = evaluate_mAP(val_dataloader, model, configs, None)
+    print("\nDone computing mAP...\n")
     for idx, cls in enumerate(ap_class):
-        print("\t|||\t Class {} ({}): AP = {}".format(cls, class_names[cls], AP[idx]))
+        print("\t>>>\t Class {} ({}): precision = {:.4f}, recall = {:.4f}, AP = {:.4f}, f1: {:.4f}".format(cls, \
+                class_names[cls][:3], precision[idx], recall[idx], AP[idx], f1[idx]))
 
-    print("mAP: {}".format(AP.mean()))
+    print("\nmAP: {}\n".format(AP.mean()))

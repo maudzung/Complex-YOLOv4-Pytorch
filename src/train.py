@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 sys.path.append('./')
 
-from data_process.kitti_dataloader import create_train_val_dataloader
+from data_process.kitti_dataloader import create_train_dataloader, create_val_dataloader
 from models.model_utils import create_model, make_data_parallel, get_num_parameters
 from utils.train_utils import create_optimizer, create_lr_scheduler, get_saved_state, save_checkpoint
 from utils.train_utils import reduce_tensor, to_python_float, get_tensorboard_log
@@ -88,14 +88,14 @@ def main_worker(gpu_idx, configs):
     # load weight from a checkpoint
     if configs.pretrained_path is not None:
         assert os.path.isfile(configs.pretrained_path), "=> no checkpoint found at '{}'".format(configs.pretrained_path)
-        model.load_weights(weightfile=configs.pretrained_path)
+        model.load_state_dict(torch.load(configs.pretrained_path))
         if logger is not None:
             logger.info('loaded pretrained model at {}'.format(configs.pretrained_path))
 
     # resume weights of model from a checkpoint
     if configs.resume_path is not None:
         assert os.path.isfile(configs.resume_path), "=> no checkpoint found at '{}'".format(configs.resume_path)
-        model.load_weights(weightfile=configs.resume_path)
+        model.load_state_dict(torch.load(configs.pretrained_path))
         if logger is not None:
             logger.info('resume training model from checkpoint {}'.format(configs.pretrained_path))
 
@@ -122,15 +122,13 @@ def main_worker(gpu_idx, configs):
     if logger is not None:
         logger.info(">>> Loading dataset & getting dataloader...")
     # Create dataloader
-    train_loader, val_loader, train_sampler = create_train_val_dataloader(configs)
+    train_dataloader, train_sampler = create_train_dataloader(configs)
     if logger is not None:
-        logger.info('number of batches in train set: {}'.format(len(train_loader)))
-        if val_loader is not None:
-            logger.info('number of batches in val set: {}'.format(len(val_loader)))
+        logger.info('number of batches in training set: {}'.format(len(train_dataloader)))
 
     if configs.evaluate:
-        assert val_loader is not None, "The validation should not be None"
-        precision, recall, AP, f1, ap_class = evaluate_mAP(val_loader, model, configs, None)
+        val_dataloader = create_val_dataloader(configs)
+        precision, recall, AP, f1, ap_class = evaluate_mAP(val_dataloader, model, configs, None)
         print('Evaluate - precision: {}, recall: {}, AP: {}, f1: {}, ap_class: {}'.format(precision, recall, AP, f1,
                                                                                           ap_class))
         return
@@ -145,9 +143,10 @@ def main_worker(gpu_idx, configs):
         if configs.distributed:
             train_sampler.set_epoch(epoch)
         # train for one epoch
-        train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer)
+        train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer)
         if not configs.no_val:
-            precision, recall, AP, f1, ap_class = evaluate_mAP(val_loader, model, configs, logger)
+            val_dataloader = create_val_dataloader(configs)
+            precision, recall, AP, f1, ap_class = evaluate_mAP(val_dataloader, model, configs, logger)
             val_metrics_dict = {'precision': precision, 'recall': recall, 'AP': AP, 'f1': f1, 'ap_class': ap_class}
             if tb_writer is not None:
                 tb_writer.add_scalars('Validation', val_metrics_dict, epoch)
@@ -167,20 +166,20 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def train_one_epoch(train_loader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer):
+def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
 
-    progress = ProgressMeter(len(train_loader), [batch_time, data_time, losses],
+    progress = ProgressMeter(len(train_dataloader), [batch_time, data_time, losses],
                              prefix="Train - Epoch: [{}/{}]".format(epoch, configs.num_epochs))
 
-    num_iters_per_epoch = len(train_loader)
+    num_iters_per_epoch = len(train_dataloader)
 
     # switch to train mode
     model.train()
     start_time = time.time()
-    for batch_idx, batch_data in enumerate(tqdm(train_loader)):
+    for batch_idx, batch_data in enumerate(tqdm(train_dataloader)):
         data_time.update(time.time() - start_time)
         _, imgs, targets = batch_data
         global_step = num_iters_per_epoch * (epoch - 1) + batch_idx + 1

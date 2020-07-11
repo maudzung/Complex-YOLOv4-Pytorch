@@ -134,6 +134,16 @@ python evaluate.py ----gpu_idx 0 --pretrained_path <PATH> --img_size <SIZE> --co
 
 The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 will be updated soon. 
 
+- Evaluate the _**complex-YOLOv3**_ model on the validation set: <br>
+Download the trained model from [**_here_**](https://drive.google.com/file/d/1gEpVxfgJZ9CTDt1ym2W0M5OHDjdCZzAw/view?usp=sharing), 
+then put it to `${ROOT}/checkpoints/complex_yolov3/complex_yolov3.pth` and execute:
+
+```shell script
+python evaluate.py --gpu_idx 0 --pretrained_path ../checkpoints/complex_yolov3/complex_yolov3.pth --cfgfile ./config/complex_yolov3.cfg 
+```
+
+- **_(Complex-YOLOv4 trained model will be provided soon)_**
+
 **mAP Comparison** _(min 0.50 IoU)_
 
 | Model/Class             | Car     | Pedestrian | Cyclist | Average |
@@ -181,7 +191,11 @@ Thank you!
 ## Folder structure
 
 ```
-${ROOT}   
+${ROOT}
+└── checkpoints/    
+    ├── complex_yolov2/
+    ├── complex_yolov3/
+    └── complex_yolov4/
 └── dataset/    
     └── kitti/
         ├──ImageSets/
