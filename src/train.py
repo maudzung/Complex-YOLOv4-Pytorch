@@ -54,10 +54,7 @@ def main():
 
 def main_worker(gpu_idx, configs):
     configs.gpu_idx = gpu_idx
-
-    if configs.gpu_idx is not None:
-        print("Use GPU: {} for training".format(configs.gpu_idx))
-        configs.device = torch.device('cuda:{}'.format(configs.gpu_idx))
+    configs.device = torch.device('cpu' if configs.gpu_idx is None else 'cuda:{}'.format(configs.gpu_idx))
 
     if configs.distributed:
         if configs.dist_url == "env://" and configs.rank == -1:
@@ -188,7 +185,7 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
 
         targets = targets.to(configs.device, non_blocking=True)
         imgs = imgs.to(configs.device, non_blocking=True)
-        total_loss, outputs = model(imgs, targets)
+        total_loss, outputs = model(imgs, targets, configs.device)
 
         # For torch.nn.DataParallel case
         if (not configs.distributed) and (configs.gpu_idx is None):

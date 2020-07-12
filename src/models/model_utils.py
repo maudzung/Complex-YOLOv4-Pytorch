@@ -89,5 +89,5 @@ if __name__ == '__main__':
     model = create_model(configs).to(device=configs.device)
     sample_input = torch.randn((1, 3, 608, 608)).to(device=configs.device)
     # summary(model.cuda(), (3, 608, 608))
-    output = model(sample_input)
+    output = model(sample_input, targets=None, device=configs.device)
     print(output.size())
