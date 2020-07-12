@@ -153,6 +153,11 @@ def main_worker(gpu_idx, configs):
             model_state_dict, utils_state_dict = get_saved_state(model, optimizer, lr_scheduler, epoch, configs)
             save_checkpoint(configs.checkpoints_dir, configs.saved_fn, model_state_dict, utils_state_dict, epoch)
 
+        if configs.lr_type == 'cosin':
+            lr_scheduler.step()
+            if tb_writer is not None:
+                tb_writer.add_scalar('LR', lr_scheduler.get_lr()[0], epoch)
+
     if tb_writer is not None:
         tb_writer.close()
     if configs.distributed:
@@ -196,7 +201,10 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
         if global_step % configs.subdivisions == 0:
             optimizer.step()
             # Adjust learning rate
-            lr_scheduler.step()
+            if configs.lr_type == 'multi_step':
+                lr_scheduler.step()
+                if tb_writer is not None:
+                    tb_writer.add_scalar('LR', lr_scheduler.get_lr()[0], global_step)
             # zero the parameter gradients
             optimizer.zero_grad()
 
@@ -212,7 +220,6 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
         if tb_writer is not None:
             if (global_step % configs.tensorboard_freq) == 0:
                 tensorboard_log = get_tensorboard_log(model)
-                tensorboard_log['lr'] = lr_scheduler.get_lr()[0] * configs.batch_size * configs.subdivisions
                 tensorboard_log['avg_loss'] = losses.avg
                 tb_writer.add_scalars('Train', tensorboard_log, global_step)
 
