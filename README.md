@@ -87,17 +87,44 @@ python kitti_dataloader.py --show-train-data --mosaic --random-padding --output-
 python test.py --gpu_idx 0 --pretrained_path <PATH>...
 ```
 
-The trained model will be provided soon. Please watch the repo to get notifications for next update.
+#### 2.4.3. Evaluation
 
-#### 2.4.3. Training
+```shell script
+python evaluate.py --gpu_idx 0 --pretrained_path <PATH> --img_size <SIZE> --conf-thresh <THRESH> --nms-thresh <THRESH> --iou-thresh <THRESH>...
+```
+(The `conf-thresh`, `nms-thresh`, and `iou-thresh` params can be adjusted. By default, these params have been set to _**0.5**_)
 
-##### 2.4.3.1. Single machine, single gpu
+
+- Evaluate the _**complex-YOLOv3**_ model on the validation set: <br>
+Download the trained model from [**_here_**](https://drive.google.com/file/d/1gEpVxfgJZ9CTDt1ym2W0M5OHDjdCZzAw/view?usp=sharing), 
+then put it to `${ROOT}/checkpoints/complex_yolov3/complex_yolov3.pth` and execute:
+
+```shell script
+python evaluate.py --gpu_idx 0 --pretrained_path ../checkpoints/complex_yolov3/complex_yolov3.pth --cfgfile ./config/complex_yolov3.cfg 
+```
+
+
+- **_(Complex-YOLOv4 trained model will be provided soon. Please watch the repo to get notifications for next update.)_**
+
+- The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 _(will be updated soon)_. 
+
+Evaluation metrics: **mAP** _(min 0.50 IoU)_
+
+| Model/Class             | Car     | Pedestrian | Cyclist | Average |
+| ----------------------- |:--------|:-----------|:--------|:--------|
+| Complex-YOLO-v2         |    |       |    |    |
+| Complex-YOLO-v3         |    |       |    |    |
+| Complex-YOLO-v4         |    |       |    |    |
+
+#### 2.4.4. Training
+
+##### 2.4.4.1. Single machine, single gpu
 
 ```shell script
 python train.py --gpu_idx 0 --multiscale_training --batch_size <N> --num_workers <N>...
 ```
 
-##### 2.4.3.2. Multi-processing Distributed Data Parallel Training
+##### 2.4.4.2. Multi-processing Distributed Data Parallel Training
 We should always use the `nccl` backend for multi-processing distributed training since it currently provides the best 
 distributed training performance.
 
@@ -125,32 +152,6 @@ To reproduce the results, you can run the bash shell script
 ```bash
 ./train.sh
 ```
-
-### 2.4.4. Evaluation
-
-```shell script
-python evaluate.py ----gpu_idx 0 --pretrained_path <PATH> --img_size <SIZE> --conf-thresh <THRESH> --nms-thresh <THRESH> --iou-thresh <THRESH>...
-```
-
-The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 will be updated soon. 
-
-- Evaluate the _**complex-YOLOv3**_ model on the validation set: <br>
-Download the trained model from [**_here_**](https://drive.google.com/file/d/1gEpVxfgJZ9CTDt1ym2W0M5OHDjdCZzAw/view?usp=sharing), 
-then put it to `${ROOT}/checkpoints/complex_yolov3/complex_yolov3.pth` and execute:
-
-```shell script
-python evaluate.py --gpu_idx 0 --pretrained_path ../checkpoints/complex_yolov3/complex_yolov3.pth --cfgfile ./config/complex_yolov3.cfg 
-```
-
-- **_(Complex-YOLOv4 trained model will be provided soon)_**
-
-**mAP Comparison** _(min 0.50 IoU)_
-
-| Model/Class             | Car     | Pedestrian | Cyclist | Average |
-| ----------------------- |:--------|:-----------|:--------|:--------|
-| Complex-YOLO-v2         |    |       |    |    |
-| Complex-YOLO-v3         |    |       |    |    |
-| Complex-YOLO-v4         |    |       |    |    |
 
 
 ### 2.5. List of usage for Bag of Freebies (BoF) & Bag of Specials (BoS) in this implementation
