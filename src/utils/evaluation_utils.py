@@ -218,15 +218,15 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
     return batch_metrics
 
 
-def rotated_box_wh_iou_polygon(anchor, wh, imre):
+def rotated_box_wh_iou_polygon(anchor, wh, imre, device):
     w1, h1, im1, re1 = anchor[0], anchor[1], anchor[2], anchor[3]
 
     wh = wh.t()
     imre = imre.t()
     w2, h2, im2, re2 = wh[0], wh[1], imre[0], imre[1]
 
-    anchor_box = torch.cuda.FloatTensor([100, 100, w1, h1, im1, re1]).view(-1, 6)
-    target_boxes = torch.cuda.FloatTensor(w2.shape[0], 6).fill_(100)
+    anchor_box = torch.tensor([100, 100, w1, h1, im1, re1], device=device, dtype=torch.float).view(-1, 6)
+    target_boxes = torch.full(size=(w2.shape[0], 6), fill_value=100, device=device, dtype=torch.float)
 
     target_boxes[:, 2] = w2
     target_boxes[:, 3] = h2
@@ -238,9 +238,9 @@ def rotated_box_wh_iou_polygon(anchor, wh, imre):
     return torch.from_numpy(ious)
 
 
-def rotated_box_11_iou_polygon(box1, box2, nG):
-    box1_new = torch.cuda.FloatTensor(box1.shape[0], 6).fill_(0)
-    box2_new = torch.cuda.FloatTensor(box2.shape[0], 6).fill_(0)
+def rotated_box_11_iou_polygon(box1, box2, nG, device):
+    box1_new = torch.full(size=(box1.shape[0], 6), fill_value=0, device=device, dtype=torch.float)
+    box2_new = torch.full(size=(box2.shape[0], 6), fill_value=0, device=device, dtype=torch.float)
 
     box1_new[:, :4] = box1[:, :4]
     box1_new[:, 4:] = box1[:, 4:]

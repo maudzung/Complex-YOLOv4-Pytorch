@@ -88,9 +88,9 @@ class YoloLayer(nn.Module):
         gimre = target_boxes[:, 4:]
 
         # Get anchors with best iou
-        ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre) for anchor in anchors])
-
+        ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre, device=device) for anchor in anchors])
         best_ious, best_n = ious.max(0)
+
         b, target_labels = target[:, :2].long().t()
 
         gx, gy = gxy.t()
@@ -120,8 +120,8 @@ class YoloLayer(nn.Module):
         # Compute label correctness and iou at best anchor
         class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
 
-        rotated_iou_scores = rotated_box_11_iou_polygon(pred_boxes[b, best_n, gj, gi], target_boxes, nG)
-        iou_scores[b, best_n, gj, gi] = rotated_iou_scores.cuda()
+        rotated_iou_scores = rotated_box_11_iou_polygon(pred_boxes[b, best_n, gj, gi], target_boxes, nG, device)
+        iou_scores[b, best_n, gj, gi] = rotated_iou_scores.to(device=device)
 
         tconf = obj_mask.float()
         return iou_scores, class_mask, obj_mask.type(torch.bool), noobj_mask.type(
