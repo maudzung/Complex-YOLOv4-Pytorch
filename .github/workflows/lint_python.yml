@@ -22,8 +22,8 @@ jobs:
       #  run: |
       #    pip install black
       #    black --check . || true
-      - run: codespell --quiet-level=2 || true  # --ignore-words-list="" --skip=""
+      - run: codespell --ignore-words-list="tre" --quiet-level=2  # --skip=""
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       - run: isort --profile black --recursive . || true
-      - run: pip install -r requirements.txt || true
+      - run: pip install matplotlib -r requirements.txt || true
       - run: pytest . || true
