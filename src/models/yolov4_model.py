@@ -13,6 +13,7 @@ import torch.nn.functional as F
 sys.path.append('../')
 
 from models.yolo_layer import YoloLayer
+from utils.torch_utils import get_region_boxes
 
 
 class Mish(nn.Module):
