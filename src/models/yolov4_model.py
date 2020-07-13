@@ -492,7 +492,7 @@ if __name__ == "__main__":
     # Inference input size is 416*416 does not mean training size is the same
     # Training size could be 608*608 or even other sizes
     # Optional inference sizes:
-    #   Hight in {320, 416, 512, 608, ... 320 + 96 * n}
+    #   Height in {320, 416, 512, 608, ... 320 + 96 * n}
     #   Width in {320, 416, 512, 608, ... 320 + 96 * m}
     sized = cv2.resize(img, (width, height))
     sized = cv2.cvtColor(sized, cv2.COLOR_BGR2RGB)
