@@ -26,7 +26,7 @@ jobs:
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       - run: isort --profile black --recursive . || true
       - run: pip install matplotlib shapely tqdm vtk -r requirements.txt
-      - run: pip install mayavi  # must be installed AFTER numpy and vtk
+      - run: pip install mayavi==4.7.0  # must be installed AFTER numpy and vtk
       - run: |
           cd src
           bash ./test.sh
