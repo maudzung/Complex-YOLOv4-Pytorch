@@ -102,6 +102,7 @@ def main_worker(gpu_idx, configs):
     # Make sure to create optimizer after moving the model to cuda
     optimizer = create_optimizer(configs, model)
     lr_scheduler = create_lr_scheduler(optimizer, configs)
+    configs.step_lr_in_epoch = True if configs.lr_type in ['multi_step'] else False
 
     # resume optimizer, lr_scheduler from a checkpoint
     if configs.resume_path is not None:
@@ -153,7 +154,7 @@ def main_worker(gpu_idx, configs):
             model_state_dict, utils_state_dict = get_saved_state(model, optimizer, lr_scheduler, epoch, configs)
             save_checkpoint(configs.checkpoints_dir, configs.saved_fn, model_state_dict, utils_state_dict, epoch)
 
-        if configs.lr_type == 'cosin':
+        if not configs.step_lr_in_epoch:
             lr_scheduler.step()
             if tb_writer is not None:
                 tb_writer.add_scalar('LR', lr_scheduler.get_lr()[0], epoch)
@@ -201,7 +202,7 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
         if global_step % configs.subdivisions == 0:
             optimizer.step()
             # Adjust learning rate
-            if configs.lr_type == 'multi_step':
+            if configs.step_lr_in_epoch:
                 lr_scheduler.step()
                 if tb_writer is not None:
                     tb_writer.add_scalar('LR', lr_scheduler.get_lr()[0], global_step)
