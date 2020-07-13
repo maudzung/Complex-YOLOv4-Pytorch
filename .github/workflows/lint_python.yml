@@ -26,4 +26,7 @@ jobs:
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       - run: isort --profile black --recursive . || true
       - run: pip install matplotlib -r requirements.txt || true
+      - run: |
+          cd src
+          bash ./test.sh
       - run: pytest . || true
