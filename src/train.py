@@ -54,10 +54,7 @@ def main():
 
 def main_worker(gpu_idx, configs):
     configs.gpu_idx = gpu_idx
-
-    if configs.gpu_idx is not None:
-        print("Use GPU: {} for training".format(configs.gpu_idx))
-        configs.device = torch.device('cuda:{}'.format(configs.gpu_idx))
+    configs.device = torch.device('cpu' if configs.gpu_idx is None else 'cuda:{}'.format(configs.gpu_idx))
 
     if configs.distributed:
         if configs.dist_url == "env://" and configs.rank == -1:
@@ -105,6 +102,7 @@ def main_worker(gpu_idx, configs):
     # Make sure to create optimizer after moving the model to cuda
     optimizer = create_optimizer(configs, model)
     lr_scheduler = create_lr_scheduler(optimizer, configs)
+    configs.step_lr_in_epoch = True if configs.lr_type in ['multi_step'] else False
 
     # resume optimizer, lr_scheduler from a checkpoint
     if configs.resume_path is not None:
@@ -156,6 +154,11 @@ def main_worker(gpu_idx, configs):
             model_state_dict, utils_state_dict = get_saved_state(model, optimizer, lr_scheduler, epoch, configs)
             save_checkpoint(configs.checkpoints_dir, configs.saved_fn, model_state_dict, utils_state_dict, epoch)
 
+        if not configs.step_lr_in_epoch:
+            lr_scheduler.step()
+            if tb_writer is not None:
+                tb_writer.add_scalar('LR', lr_scheduler.get_lr()[0], epoch)
+
     if tb_writer is not None:
         tb_writer.close()
     if configs.distributed:
@@ -188,7 +191,7 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
 
         targets = targets.to(configs.device, non_blocking=True)
         imgs = imgs.to(configs.device, non_blocking=True)
-        total_loss, outputs = model(imgs, targets)
+        total_loss, outputs = model(imgs, targets, configs.device)
 
         # For torch.nn.DataParallel case
         if (not configs.distributed) and (configs.gpu_idx is None):
@@ -199,7 +202,10 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
         if global_step % configs.subdivisions == 0:
             optimizer.step()
             # Adjust learning rate
-            lr_scheduler.step()
+            if configs.step_lr_in_epoch:
+                lr_scheduler.step()
+                if tb_writer is not None:
+                    tb_writer.add_scalar('LR', lr_scheduler.get_lr()[0], global_step)
             # zero the parameter gradients
             optimizer.zero_grad()
 
@@ -215,7 +221,6 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
         if tb_writer is not None:
             if (global_step % configs.tensorboard_freq) == 0:
                 tensorboard_log = get_tensorboard_log(model)
-                tensorboard_log['lr'] = lr_scheduler.get_lr()[0] * configs.batch_size * configs.subdivisions
                 tensorboard_log['avg_loss'] = losses.avg
                 tb_writer.add_scalars('Train', tensorboard_log, global_step)
 

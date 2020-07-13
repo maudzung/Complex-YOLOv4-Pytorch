@@ -108,7 +108,7 @@ if __name__ == '__main__':
         for batch_idx, (img_paths, imgs_bev) in enumerate(test_dataloader):
             input_imgs = imgs_bev.to(device=configs.device).float()
             t1 = time_synchronized()
-            outputs = model(input_imgs)
+            outputs = model(input_imgs, device=configs.device)
             t2 = time_synchronized()
             detections = post_processing(outputs, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
 
