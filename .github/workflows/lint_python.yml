@@ -6,9 +6,10 @@ on:
 jobs:
   lint_python:
     strategy:
-     matrix:
-       os: [ubuntu-latest]    # [ubuntu-latest, macos-latest, windows-latest]
-       python-version: [3.7]  # [2.7, 3.5, 3.6, 3.7, 3.8, pypy3]
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]    # [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.7]  # [2.7, 3.5, 3.6, 3.7, 3.8, pypy3]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@master
@@ -17,16 +18,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install black codespell flake8 isort pytest wheel
       - run: black --check . || true
-      # - run: black --diff . || true
-      # - if: matrix.python-version >= 3.6
-      #  run: |
-      #    pip install black
-      #    black --check . || true
       - run: codespell --ignore-words-list="tre" --quiet-level=2  # --skip=""
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       - run: isort --profile black --recursive . || true
       - run: pip install matplotlib shapely tqdm 'vtk<9.0.0' -r requirements.txt
-      - run: pip install mayavi || true  # must be installed AFTER numpy and vtk
+      - run: pip install mayavi  # must be installed AFTER numpy and vtk
       - run: |
           cd src
           bash ./test.sh
