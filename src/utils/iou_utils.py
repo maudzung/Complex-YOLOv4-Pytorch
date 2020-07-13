@@ -142,7 +142,7 @@ def bboxes_iou(bboxes_a, bboxes_b, fmt='voc', iou_type='iou'):
         )
 
     # c for covering, of shape `(N,K,2)`
-    # the last dim is box width, box hight
+    # the last dim is box width, box height
     bboxes_c = br_union - tl_union
 
     area_covering = torch.prod(bboxes_c, 2)  # shape `(N,K)`
