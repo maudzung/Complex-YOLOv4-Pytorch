@@ -233,7 +233,7 @@ def rotated_box_wh_iou_polygon(anchor, wh, imre, device):
     target_boxes[:, 4] = im2
     target_boxes[:, 5] = re2
 
-    ious = rotated_bbox_iou_polygon(anchor_box[0], target_boxes)
+    ious = rotated_bbox_iou_polygon_vectorize(anchor_box[0], target_boxes)
 
     return torch.from_numpy(ious)
 
@@ -252,8 +252,7 @@ def rotated_box_11_iou_polygon(box1, box2, nG, device):
     for i in range(box1_new.shape[0]):
         bbox1 = box1_new[i]
         bbox2 = box2_new[i].view(-1, 6)
-
-        iou = rotated_bbox_iou_polygon(bbox1, bbox2).squeeze()
+        iou = rotated_bbox_iou_polygon_vectorize(bbox1, bbox2).squeeze()
         ious.append(iou)
 
     ious = np.array(ious)
@@ -277,6 +276,27 @@ def rotated_bbox_iou_polygon(box1, box2):
         bev_corners = bev_utils.get_corners(x, y, w, l, angle)
         bbox2.append(bev_corners)
     bbox2 = convert_format(np.array(bbox2))
+
+    return compute_iou(bbox1[0], bbox2)
+
+
+def rotated_bbox_iou_polygon_vectorize(box1, box2):
+    """ calculate IoU of polygons with vectorization
+
+    :param box1: (6,)
+    :param box2: (num, 6)
+    :return:
+    """
+    box1 = to_cpu(box1).numpy()
+    box2 = to_cpu(box2).numpy()
+
+    x, y, w, l, im, re = box1
+    angle = np.arctan2(im, re)
+    bbox1 = np.array(bev_utils.get_corners(x, y, w, l, angle)).reshape(-1, 4, 2)
+    bbox1 = convert_format(bbox1)
+
+    bbox2 = bev_utils.get_corners_vectorize(box2)
+    bbox2 = convert_format(bbox2)
 
     return compute_iou(bbox1[0], bbox2)
 

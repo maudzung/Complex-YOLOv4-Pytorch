@@ -66,6 +66,7 @@ class YoloLayer(nn.Module):
         nA = pred_boxes.size(1)
         nC = pred_cls.size(-1)
         nG = pred_boxes.size(2)
+        n_target_boxes = target.size(0)
 
         # Create output tensors on "device"
         obj_mask = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.uint8)
@@ -79,51 +80,54 @@ class YoloLayer(nn.Module):
         tim = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
         tre = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
         tcls = torch.full(size=(nB, nA, nG, nG, nC), fill_value=0, device=device, dtype=torch.float)
-
-        # Convert to position relative to box
-        target_boxes = target[:, 2:8]
-
-        gxy = target_boxes[:, :2] * nG
-        gwh = target_boxes[:, 2:4] * nG
-        gimre = target_boxes[:, 4:]
-
-        # Get anchors with best iou
-        ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre, device=device) for anchor in anchors])
-        best_ious, best_n = ious.max(0)
-
-        b, target_labels = target[:, :2].long().t()
-
-        gx, gy = gxy.t()
-        gw, gh = gwh.t()
-        gim, gre = gimre.t()
-        gi, gj = gxy.long().t()
-        # Set masks
-        obj_mask[b, best_n, gj, gi] = 1
-        noobj_mask[b, best_n, gj, gi] = 0
-
-        # Set noobj mask to zero where iou exceeds ignore threshold
-        for i, anchor_ious in enumerate(ious.t()):
-            noobj_mask[b[i], anchor_ious > self.ignore_thresh, gj[i], gi[i]] = 0
-
-        # Coordinates
-        tx[b, best_n, gj, gi] = gx - gx.floor()
-        ty[b, best_n, gj, gi] = gy - gy.floor()
-        # Width and height
-        tw[b, best_n, gj, gi] = torch.log(gw / anchors[best_n][:, 0] + 1e-16)
-        th[b, best_n, gj, gi] = torch.log(gh / anchors[best_n][:, 1] + 1e-16)
-        # Im and real part
-        tim[b, best_n, gj, gi] = gim
-        tre[b, best_n, gj, gi] = gre
-
-        # One-hot encoding of label
-        tcls[b, best_n, gj, gi, target_labels] = 1
-        # Compute label correctness and iou at best anchor
-        class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-
-        rotated_iou_scores = rotated_box_11_iou_polygon(pred_boxes[b, best_n, gj, gi], target_boxes, nG, device)
-        iou_scores[b, best_n, gj, gi] = rotated_iou_scores.to(device=device)
-
         tconf = obj_mask.float()
+
+        if n_target_boxes > 0: # Make sure that there is at least 1 box
+            # Convert to position relative to box
+            target_boxes = target[:, 2:8]
+
+            gxy = target_boxes[:, :2] * nG
+            gwh = target_boxes[:, 2:4] * nG
+            gimre = target_boxes[:, 4:]
+
+            # Get anchors with best iou
+            ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre, device=device) for anchor in anchors])
+            best_ious, best_n = ious.max(0)
+
+            b, target_labels = target[:, :2].long().t()
+
+            gx, gy = gxy.t()
+            gw, gh = gwh.t()
+            gim, gre = gimre.t()
+            gi, gj = gxy.long().t()
+            # Set masks
+            obj_mask[b, best_n, gj, gi] = 1
+            noobj_mask[b, best_n, gj, gi] = 0
+
+            # Set noobj mask to zero where iou exceeds ignore threshold
+            for i, anchor_ious in enumerate(ious.t()):
+                noobj_mask[b[i], anchor_ious > self.ignore_thresh, gj[i], gi[i]] = 0
+
+            # Coordinates
+            tx[b, best_n, gj, gi] = gx - gx.floor()
+            ty[b, best_n, gj, gi] = gy - gy.floor()
+            # Width and height
+            tw[b, best_n, gj, gi] = torch.log(gw / anchors[best_n][:, 0] + 1e-16)
+            th[b, best_n, gj, gi] = torch.log(gh / anchors[best_n][:, 1] + 1e-16)
+            # Im and real part
+            tim[b, best_n, gj, gi] = gim
+            tre[b, best_n, gj, gi] = gre
+
+            # One-hot encoding of label
+            tcls[b, best_n, gj, gi, target_labels] = 1
+            # Compute label correctness and iou at best anchor
+            class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
+
+            rotated_iou_scores = rotated_box_11_iou_polygon(pred_boxes[b, best_n, gj, gi], target_boxes, nG, device)
+            iou_scores[b, best_n, gj, gi] = rotated_iou_scores.to(device=device)
+
+            tconf = obj_mask.float()
+
         return iou_scores, class_mask, obj_mask.type(torch.bool), noobj_mask.type(
             torch.bool), tx, ty, tw, th, tim, tre, tcls, tconf
 
