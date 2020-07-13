@@ -92,7 +92,7 @@ def main_worker(gpu_idx, configs):
     # resume weights of model from a checkpoint
     if configs.resume_path is not None:
         assert os.path.isfile(configs.resume_path), "=> no checkpoint found at '{}'".format(configs.resume_path)
-        model.load_state_dict(torch.load(configs.pretrained_path))
+        model.load_state_dict(torch.load(configs.resume_path))
         if logger is not None:
             logger.info('resume training model from checkpoint {}'.format(configs.pretrained_path))
 
