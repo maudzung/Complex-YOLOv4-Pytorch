@@ -109,8 +109,10 @@ class KittiDataset(Dataset):
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
         # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
-        targets = torch.zeros((target.shape[0], 8))
-        targets[:, 1:] = torch.from_numpy(target)
+        n_target = len(target)
+        targets = torch.zeros((n_target, 8))
+        if n_target > 0:
+            targets[:, 1:] = torch.from_numpy(target)
 
         rgb_map = torch.from_numpy(rgb_map).float()
 
