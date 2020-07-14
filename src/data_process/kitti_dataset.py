@@ -108,15 +108,9 @@ class KittiDataset(Dataset):
         target = kitti_bev_utils.build_yolo_target(labels)
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
-        ntargets = 0
-        for i, t in enumerate(target):
-            if t.sum(0):
-                ntargets += 1
         # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
-        targets = torch.zeros((ntargets, 8))
-        for i, t in enumerate(target):
-            if t.sum(0):
-                targets[i, 1:] = torch.from_numpy(t)
+        targets = torch.zeros((target.shape[0], 8))
+        targets[:, 1:] = torch.from_numpy(target)
 
         rgb_map = torch.from_numpy(rgb_map).float()
 
@@ -234,20 +228,20 @@ class KittiDataset(Dataset):
 
     def get_image(self, idx):
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(idx))
-        assert os.path.isfile(img_file)
+        # assert os.path.isfile(img_file)
         return cv2.imread(img_file)  # (H, W, C) -> (H, W, 3) OpenCV reads in BGR mode
 
     def get_lidar(self, idx):
         lidar_file = os.path.join(self.lidar_dir, '{:06d}.bin'.format(idx))
-        assert os.path.isfile(lidar_file)
+        # assert os.path.isfile(lidar_file)
         return np.fromfile(lidar_file, dtype=np.float32).reshape(-1, 4)
 
     def get_calib(self, idx):
         calib_file = os.path.join(self.calib_dir, '{:06d}.txt'.format(idx))
-        assert os.path.isfile(calib_file)
+        # assert os.path.isfile(calib_file)
         return kitti_data_utils.Calibration(calib_file)
 
     def get_label(self, idx):
         label_file = os.path.join(self.label_dir, '{:06d}.txt'.format(idx))
-        assert os.path.isfile(label_file)
+        # assert os.path.isfile(label_file)
         return kitti_data_utils.read_label(label_file)
