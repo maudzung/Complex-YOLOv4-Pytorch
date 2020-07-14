@@ -26,7 +26,7 @@ def create_train_dataloader(configs):
         Random_Rotation(limit_angle=20., p=1.0),
         Random_Scaling(scaling_range=(0.95, 1.05), p=1.0)
     ], p=0.6)
-    train_dataset = KittiDataset(configs.dataset_dir, split='train', mode='train', aug_transforms=train_aug_transforms,
+    train_dataset = KittiDataset(configs.dataset_dir, mode='train', aug_transforms=train_aug_transforms,
                                  hflip_prob=0.5, multiscale=configs.multiscale_training,
                                  num_samples=configs.num_samples, mosaic=configs.mosaic,
                                  random_padding=configs.random_padding)
@@ -44,7 +44,7 @@ def create_val_dataloader(configs):
     """Create dataloader for validation"""
 
     val_sampler = None
-    val_dataset = KittiDataset(configs.dataset_dir, split='val', mode='val', aug_transforms=None, hflip_prob=0.,
+    val_dataset = KittiDataset(configs.dataset_dir, mode='val', aug_transforms=None, hflip_prob=0.,
                                multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
     if configs.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
@@ -58,7 +58,7 @@ def create_val_dataloader(configs):
 def create_test_dataloader(configs):
     """Create dataloader for testing phase"""
 
-    test_dataset = KittiDataset(configs.dataset_dir, split='test', mode='test', aug_transforms=None, hflip_prob=0.,
+    test_dataset = KittiDataset(configs.dataset_dir, mode='test', aug_transforms=None, hflip_prob=0.,
                                 multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
     test_sampler = None
     if configs.distributed:
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 
     configs = edict(vars(parser.parse_args()))
     configs.distributed = False  # For testing
-    configs.pin_memory = True
+    configs.pin_memory = False
     configs.dataset_dir = os.path.join('../../', 'dataset', 'kitti')
 
     if configs.show_train_data:

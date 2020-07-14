@@ -151,34 +151,21 @@ def get_corners_vectorize(box2):
 
 def build_yolo_target(labels):
     bc = cnf.boundary
-    target = np.zeros([50, 7], dtype=np.float32)
-
-    index = 0
+    target = []
     for i in range(labels.shape[0]):
         cl, x, y, z, h, w, l, yaw = labels[i]
-
         # ped and cyc labels are very small, so lets add some factor to height/width
         l = l + 0.3
         w = w + 0.3
-
         yaw = np.pi * 2 - yaw
-        if (x > bc["minX"]) and (x < bc["maxX"]) and (y > bc["minY"]) and (y < bc["maxY"]):
+        if (bc["minX"] < x < bc["maxX"]) and (bc["minY"] < y < bc["maxY"]):
             y1 = (y - bc["minY"]) / (bc["maxY"] - bc["minY"])  # we should put this in [0,1], so divide max_size  80 m
             x1 = (x - bc["minX"]) / (bc["maxX"] - bc["minX"])  # we should put this in [0,1], so divide max_size  40 m
             w1 = w / (bc["maxY"] - bc["minY"])
             l1 = l / (bc["maxX"] - bc["minX"])
+            target.append([cl, y1, x1, w1, l1, math.sin(float(yaw)), math.cos(float(yaw))])
 
-            target[index][0] = cl
-            target[index][1] = y1
-            target[index][2] = x1
-            target[index][3] = w1
-            target[index][4] = l1
-            target[index][5] = math.sin(float(yaw))
-            target[index][6] = math.cos(float(yaw))
-
-            index = index + 1
-
-    return target
+    return np.array(target, dtype=np.float32)
 
 
 def inverse_yolo_target(targets, bc):

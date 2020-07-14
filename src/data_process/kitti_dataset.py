@@ -27,13 +27,13 @@ def resize(image, size):
 
 
 class KittiDataset(Dataset):
-    def __init__(self, dataset_dir, split='train', mode='train', aug_transforms=None, hflip_prob=0., multiscale=False,
+    def __init__(self, dataset_dir, mode='train', aug_transforms=None, hflip_prob=0., multiscale=False,
                  num_samples=None, mosaic=False, random_padding=False):
         self.dataset_dir = dataset_dir
-        self.split = split
         assert mode in ['train', 'val', 'test'], 'Invalid mode: {}'.format(mode)
         self.mode = mode
-        self.is_test = self.mode == 'test'
+        self.is_test = (self.mode == 'test')
+        sub_folder = 'testing' if self.is_test else 'training'
 
         self.multiscale = multiscale
         self.aug_transforms = aug_transforms
@@ -47,26 +47,17 @@ class KittiDataset(Dataset):
 
         self.hflip_transform = transformation.Horizontal_Flip(p=hflip_prob) if (hflip_prob > 0) else None
 
-        if self.is_test:
-            self.lidar_dir = os.path.join(self.dataset_dir, 'testing', "velodyne")
-            self.image_dir = os.path.join(self.dataset_dir, 'testing', "image_2")
-            self.calib_dir = os.path.join(self.dataset_dir, 'testing', "calib")
-            self.label_dir = os.path.join(self.dataset_dir, 'testing', "label_2")
-            self.lidar_paths = sorted(glob(os.path.join(self.lidar_dir, '*.bin')))
-            self.image_idx_list = [os.path.basename(path)[:-4] for path in self.lidar_paths]
-        else:
-            self.lidar_dir = os.path.join(self.dataset_dir, 'training', "velodyne")
-            self.image_dir = os.path.join(self.dataset_dir, 'training', "image_2")
-            self.calib_dir = os.path.join(self.dataset_dir, 'training', "calib")
-            self.label_dir = os.path.join(self.dataset_dir, 'training', "label_2")
-            split_txt_path = os.path.join(self.dataset_dir, 'ImageSets', '{}.txt'.format(split))
-            self.image_idx_list = [x.strip() for x in open(split_txt_path).readlines()]
-        self.sample_id_list = []
+        self.lidar_dir = os.path.join(self.dataset_dir, sub_folder, "velodyne")
+        self.image_dir = os.path.join(self.dataset_dir, sub_folder, "image_2")
+        self.calib_dir = os.path.join(self.dataset_dir, sub_folder, "calib")
+        self.label_dir = os.path.join(self.dataset_dir, sub_folder, "label_2")
+        split_txt_path = os.path.join(self.dataset_dir, 'ImageSets', '{}.txt'.format(mode))
+        self.image_idx_list = [x.strip() for x in open(split_txt_path).readlines()]
 
-        if self.mode == 'train':
-            self.preprocess_training_data()
-        else:
+        if self.is_test:
             self.sample_id_list = [int(sample_id) for sample_id in self.image_idx_list]
+        else:
+            self.sample_id_list = self.remove_invalid_idx(self.image_idx_list)
 
         if num_samples is not None:
             self.sample_id_list = self.sample_id_list[:num_samples]
@@ -117,15 +108,11 @@ class KittiDataset(Dataset):
         target = kitti_bev_utils.build_yolo_target(labels)
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
-        ntargets = 0
-        for i, t in enumerate(target):
-            if t.sum(0):
-                ntargets += 1
         # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
-        targets = torch.zeros((ntargets, 8))
-        for i, t in enumerate(target):
-            if t.sum(0):
-                targets[i, 1:] = torch.from_numpy(t)
+        n_target = len(target)
+        targets = torch.zeros((n_target, 8))
+        if n_target > 0:
+            targets[:, 1:] = torch.from_numpy(target)
 
         rgb_map = torch.from_numpy(rgb_map).float()
 
@@ -187,12 +174,11 @@ class KittiDataset(Dataset):
     def __len__(self):
         return len(self.sample_id_list)
 
-    def preprocess_training_data(self):
-        """
-        Discard samples which don't have current training class objects, which will not be used for training.
-        Valid sample_id is stored in self.sample_id_list
-        """
-        for sample_id in self.image_idx_list:
+    def remove_invalid_idx(self, image_idx_list):
+        """Discard samples which don't have current training class objects, which will not be used for training."""
+
+        sample_id_list = []
+        for sample_id in image_idx_list:
             sample_id = int(sample_id)
             objects = self.get_label(sample_id)
             calib = self.get_calib(sample_id)
@@ -208,7 +194,9 @@ class KittiDataset(Dataset):
                         valid_list.append(labels[i, 0])
 
             if len(valid_list) > 0:
-                self.sample_id_list.append(sample_id)
+                sample_id_list.append(sample_id)
+
+        return sample_id_list
 
     def check_point_cloud_range(self, xyz):
         """
@@ -242,20 +230,20 @@ class KittiDataset(Dataset):
 
     def get_image(self, idx):
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(idx))
-        assert os.path.isfile(img_file)
+        # assert os.path.isfile(img_file)
         return cv2.imread(img_file)  # (H, W, C) -> (H, W, 3) OpenCV reads in BGR mode
 
     def get_lidar(self, idx):
         lidar_file = os.path.join(self.lidar_dir, '{:06d}.bin'.format(idx))
-        assert os.path.isfile(lidar_file)
+        # assert os.path.isfile(lidar_file)
         return np.fromfile(lidar_file, dtype=np.float32).reshape(-1, 4)
 
     def get_calib(self, idx):
         calib_file = os.path.join(self.calib_dir, '{:06d}.txt'.format(idx))
-        assert os.path.isfile(calib_file)
+        # assert os.path.isfile(calib_file)
         return kitti_data_utils.Calibration(calib_file)
 
     def get_label(self, idx):
         label_file = os.path.join(self.label_dir, '{:06d}.txt'.format(idx))
-        assert os.path.isfile(label_file)
+        # assert os.path.isfile(label_file)
         return kitti_data_utils.read_label(label_file)

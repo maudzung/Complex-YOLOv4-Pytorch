@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 -----------------------------------------------------------------------------------
 # Refer: https://github.com/Tianxiaomo/pytorch-YOLOv4
+# Refer: https://github.com/ghimiredhikura/Complex-YOLOv3
 """
 
 import sys
@@ -12,7 +13,7 @@ import torch.nn as nn
 sys.path.append('../')
 
 from utils.torch_utils import to_cpu
-from utils.evaluation_utils import rotated_box_11_iou_polygon, rotated_box_wh_iou_polygon
+from utils.evaluation_utils import rotated_box_wh_iou_polygon
 
 
 class YoloLayer(nn.Module):
@@ -52,27 +53,20 @@ class YoloLayer(nn.Module):
         self.anchor_w = self.scaled_anchors[:, 0:1].view((1, self.num_anchors, 1, 1))
         self.anchor_h = self.scaled_anchors[:, 1:2].view((1, self.num_anchors, 1, 1))
 
-    def build_targets(self, pred_boxes, pred_cls, target, anchors, device):
+    def build_targets(self, pred_cls, target, anchors, device):
         """ Built yolo targets to compute loss
 
-        :param pred_boxes: [num_samples or batch, num_anchors, grid_size, grid_size, 6]
-        :param pred_cls: [num_samples or batch, num_anchors, grid_size, grid_size, 3]
+        :param pred_cls: [num_samples or batch, num_anchors, grid_size, grid_size, num_classes]
         :param target: [num_boxes, 8]
         :param anchors: [num_anchors, 4]
         :return:
         """
-
-        nB = pred_boxes.size(0)
-        nA = pred_boxes.size(1)
-        nC = pred_cls.size(-1)
-        nG = pred_boxes.size(2)
+        nB, nA, nG, _, nC = pred_cls.size()
         n_target_boxes = target.size(0)
 
         # Create output tensors on "device"
         obj_mask = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.uint8)
         noobj_mask = torch.full(size=(nB, nA, nG, nG), fill_value=1, device=device, dtype=torch.uint8)
-        class_mask = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
-        iou_scores = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
         tx = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
         ty = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
         tw = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
@@ -82,7 +76,7 @@ class YoloLayer(nn.Module):
         tcls = torch.full(size=(nB, nA, nG, nG, nC), fill_value=0, device=device, dtype=torch.float)
         tconf = obj_mask.float()
 
-        if n_target_boxes > 0: # Make sure that there is at least 1 box
+        if n_target_boxes > 0:  # Make sure that there is at least 1 box
             # Convert to position relative to box
             target_boxes = target[:, 2:8]
 
@@ -120,16 +114,9 @@ class YoloLayer(nn.Module):
 
             # One-hot encoding of label
             tcls[b, best_n, gj, gi, target_labels] = 1
-            # Compute label correctness and iou at best anchor
-            class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-
-            rotated_iou_scores = rotated_box_11_iou_polygon(pred_boxes[b, best_n, gj, gi], target_boxes, nG, device)
-            iou_scores[b, best_n, gj, gi] = rotated_iou_scores.to(device=device)
-
             tconf = obj_mask.float()
 
-        return iou_scores, class_mask, obj_mask.type(torch.bool), noobj_mask.type(
-            torch.bool), tx, ty, tw, th, tim, tre, tcls, tconf
+        return obj_mask.type(torch.bool), noobj_mask.type(torch.bool), tx, ty, tw, th, tim, tre, tcls, tconf
 
     def forward(self, x, targets=None, img_size=608, device=None):
         """
@@ -139,8 +126,7 @@ class YoloLayer(nn.Module):
         :return:
         """
         self.img_size = img_size
-        num_samples = x.size(0)
-        grid_size = x.size(2)
+        num_samples, _, _, grid_size = x.size()
 
         prediction = x.view(num_samples, self.num_anchors, self.num_classes + 7, grid_size, grid_size)
         prediction = prediction.permute(0, 1, 3, 4, 2).contiguous()
@@ -181,8 +167,10 @@ class YoloLayer(nn.Module):
         if targets is None:
             return output, 0
         else:
-            iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(
-                pred_boxes=pred_boxes, pred_cls=pred_cls, target=targets, anchors=self.scaled_anchors, device=device)
+            obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(pred_cls=pred_cls,
+                                                                                             target=targets,
+                                                                                             anchors=self.scaled_anchors,
+                                                                                             device=device)
 
             # Loss : Mask outputs to ignore non-existing objects (except with conf. loss)
             loss_x = self.mse_loss(x[obj_mask], tx[obj_mask])
@@ -198,18 +186,7 @@ class YoloLayer(nn.Module):
             loss_cls = self.bce_loss(pred_cls[obj_mask], tcls[obj_mask])
             total_loss = loss_x + loss_y + loss_w + loss_h + loss_eular + loss_conf + loss_cls
 
-            # Metrics
-            cls_acc = 100 * class_mask[obj_mask].mean()
-            conf_obj = pred_conf[obj_mask].mean()
-            conf_noobj = pred_conf[noobj_mask].mean()
-            conf50 = (pred_conf > 0.5).float()
-            iou50 = (iou_scores > 0.5).float()
-            iou75 = (iou_scores > 0.75).float()
-            detected_mask = conf50 * class_mask * tconf
-            precision = torch.sum(iou50 * detected_mask) / (conf50.sum() + 1e-16)
-            recall50 = torch.sum(iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
-            recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
-
+            # Metrics (store loss values using tensorboard)
             self.metrics = {
                 "loss": to_cpu(total_loss).item(),
                 "x": to_cpu(loss_x).item(),
@@ -219,14 +196,7 @@ class YoloLayer(nn.Module):
                 "im": to_cpu(loss_im).item(),
                 "re": to_cpu(loss_re).item(),
                 "conf": to_cpu(loss_conf).item(),
-                "cls": to_cpu(loss_cls).item(),
-                "cls_acc": to_cpu(cls_acc).item(),
-                "recall50": to_cpu(recall50).item(),
-                "recall75": to_cpu(recall75).item(),
-                "precision": to_cpu(precision).item(),
-                "conf_obj": to_cpu(conf_obj).item(),
-                "conf_noobj": to_cpu(conf_noobj).item(),
-                "grid_size": grid_size,
+                "cls": to_cpu(loss_cls).item()
             }
 
             return output, total_loss
