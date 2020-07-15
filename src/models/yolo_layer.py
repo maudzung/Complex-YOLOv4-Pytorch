@@ -25,14 +25,16 @@ class YoloLayer(nn.Module):
         self.num_classes = num_classes
         self.anchors = anchors
         self.num_anchors = len(anchors)
+        self.stride = stride
+        self.scale_x_y = scale_x_y
+        self.ignore_thresh = ignore_thresh
+
         self.coord_scale = 1
         self.noobj_scale = 1
         self.obj_scale = 5
         self.class_scale = 1
-        self.ignore_thresh = ignore_thresh
-        self.stride = stride
+
         self.seen = 0
-        self.scale_x_y = scale_x_y
         self.mse_loss = nn.MSELoss()
         self.bce_loss = nn.BCELoss()
         # Initialize dummy variables
@@ -40,20 +42,20 @@ class YoloLayer(nn.Module):
         self.img_size = 0
         self.metrics = {}
 
-    def compute_grid_offsets(self, grid_size, device):
+    def compute_grid_offsets(self, grid_size):
         self.grid_size = grid_size
         g = self.grid_size
         self.stride = self.img_size / self.grid_size
         # Calculate offsets for each grid
-        self.grid_x = torch.arange(g, device=device, dtype=torch.float).repeat(g, 1).view([1, 1, g, g])
-        self.grid_y = torch.arange(g, device=device, dtype=torch.float).repeat(g, 1).t().view([1, 1, g, g])
+        self.grid_x = torch.arange(g, device=self.device, dtype=torch.float).repeat(g, 1).view([1, 1, g, g])
+        self.grid_y = torch.arange(g, device=self.device, dtype=torch.float).repeat(g, 1).t().view([1, 1, g, g])
         self.scaled_anchors = torch.tensor(
-            [(a_w / self.stride, a_h / self.stride, im, re) for a_w, a_h, im, re in self.anchors], device=device,
+            [(a_w / self.stride, a_h / self.stride, im, re) for a_w, a_h, im, re in self.anchors], device=self.device,
             dtype=torch.float)
         self.anchor_w = self.scaled_anchors[:, 0:1].view((1, self.num_anchors, 1, 1))
         self.anchor_h = self.scaled_anchors[:, 1:2].view((1, self.num_anchors, 1, 1))
 
-    def build_targets(self, pred_cls, target, anchors, device):
+    def build_targets(self, pred_cls, target, anchors):
         """ Built yolo targets to compute loss
 
         :param pred_cls: [num_samples or batch, num_anchors, grid_size, grid_size, num_classes]
@@ -65,15 +67,15 @@ class YoloLayer(nn.Module):
         n_target_boxes = target.size(0)
 
         # Create output tensors on "device"
-        obj_mask = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.uint8)
-        noobj_mask = torch.full(size=(nB, nA, nG, nG), fill_value=1, device=device, dtype=torch.uint8)
-        tx = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
-        ty = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
-        tw = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
-        th = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
-        tim = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
-        tre = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=device, dtype=torch.float)
-        tcls = torch.full(size=(nB, nA, nG, nG, nC), fill_value=0, device=device, dtype=torch.float)
+        obj_mask = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.uint8)
+        noobj_mask = torch.full(size=(nB, nA, nG, nG), fill_value=1, device=self.device, dtype=torch.uint8)
+        tx = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.float)
+        ty = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.float)
+        tw = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.float)
+        th = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.float)
+        tim = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.float)
+        tre = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.float)
+        tcls = torch.full(size=(nB, nA, nG, nG, nC), fill_value=0, device=self.device, dtype=torch.float)
         tconf = obj_mask.float()
 
         if n_target_boxes > 0:  # Make sure that there is at least 1 box
@@ -85,7 +87,7 @@ class YoloLayer(nn.Module):
             gimre = target_boxes[:, 4:]
 
             # Get anchors with best iou
-            ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre, device=device) for anchor in anchors])
+            ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre, self.device) for anchor in anchors])
             best_ious, best_n = ious.max(0)
 
             b, target_labels = target[:, :2].long().t()
@@ -126,6 +128,7 @@ class YoloLayer(nn.Module):
         :return:
         """
         self.img_size = img_size
+        self.device = device
         num_samples, _, _, grid_size = x.size()
 
         prediction = x.view(num_samples, self.num_anchors, self.num_classes + 7, grid_size, grid_size)
@@ -144,17 +147,17 @@ class YoloLayer(nn.Module):
 
         # If grid size does not match current we compute new offsets
         if grid_size != self.grid_size:
-            self.compute_grid_offsets(grid_size, device)
+            self.compute_grid_offsets(grid_size)
 
         # Add offset and scale with anchors
         # pred_boxes size: [num_samples, num_anchors, grid_size, grid_size, 6]
-        pred_boxes = torch.empty(prediction[..., :6].shape, device=device, dtype=torch.float)
+        pred_boxes = torch.empty(prediction[..., :6].shape, device=self.device, dtype=torch.float)
         pred_boxes[..., 0] = x.detach() + self.grid_x
         pred_boxes[..., 1] = y.detach() + self.grid_y
         pred_boxes[..., 2] = torch.exp(w.detach()) * self.anchor_w
         pred_boxes[..., 3] = torch.exp(h.detach()) * self.anchor_h
-        pred_boxes[..., 4] = im
-        pred_boxes[..., 5] = re
+        pred_boxes[..., 4] = im.detach()
+        pred_boxes[..., 5] = re.detach()
 
         output = torch.cat((
             pred_boxes[..., :4].view(num_samples, -1, 4) * self.stride,
@@ -169,8 +172,7 @@ class YoloLayer(nn.Module):
         else:
             obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(pred_cls=pred_cls,
                                                                                              target=targets,
-                                                                                             anchors=self.scaled_anchors,
-                                                                                             device=device)
+                                                                                             anchors=self.scaled_anchors)
 
             # Loss : Mask outputs to ignore non-existing objects (except with conf. loss)
             loss_x = self.mse_loss(x[obj_mask], tx[obj_mask])
