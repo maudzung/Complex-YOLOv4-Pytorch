@@ -41,7 +41,7 @@ def evaluate_mAP(val_loader, model, configs, logger):
             targets[:, 2:] *= configs.img_size
             imgs = imgs.to(configs.device, non_blocking=True)
 
-            outputs = model(imgs, device=configs.device)
+            outputs = model(imgs)
             outputs = post_processing(outputs, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
 
             sample_metrics += get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold=configs.iou_thresh)

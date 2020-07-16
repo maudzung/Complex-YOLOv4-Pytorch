@@ -165,7 +165,7 @@ class Darknet(nn.Module):
         self.header = torch.IntTensor([0, 0, 0, 0])
         self.seen = 0
 
-    def forward(self, x, targets=None, device=None):
+    def forward(self, x, targets=None):
         # batch_size, c, h, w
         img_size = x.size(2)
         ind = -2
@@ -231,7 +231,7 @@ class Darknet(nn.Module):
                     self.loss = self.models[ind](x)
                 outputs[ind] = None
             elif block['type'] == 'yolo':
-                x, layer_loss = self.models[ind](x, targets, img_size, device)
+                x, layer_loss = self.models[ind](x, targets, img_size)
                 loss += layer_loss
                 yolo_outputs.append(x)
             elif block['type'] == 'cost':

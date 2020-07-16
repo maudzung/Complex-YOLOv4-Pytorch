@@ -218,7 +218,8 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
     return batch_metrics
 
 
-def rotated_box_wh_iou_polygon(anchor, wh, imre, device):
+def rotated_box_wh_iou_polygon(anchor, wh, imre):
+    device = wh.device
     w1, h1, im1, re1 = anchor[0], anchor[1], anchor[2], anchor[3]
 
     wh = wh.t()

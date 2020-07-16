@@ -87,7 +87,7 @@ class YoloLayer(nn.Module):
             gimre = target_boxes[:, 4:]
 
             # Get anchors with best iou
-            ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre, self.device) for anchor in anchors])
+            ious = torch.stack([rotated_box_wh_iou_polygon(anchor, gwh, gimre) for anchor in anchors])
             best_ious, best_n = ious.max(0)
 
             b, target_labels = target[:, :2].long().t()
@@ -120,7 +120,7 @@ class YoloLayer(nn.Module):
 
         return obj_mask.type(torch.bool), noobj_mask.type(torch.bool), tx, ty, tw, th, tim, tre, tcls, tconf
 
-    def forward(self, x, targets=None, img_size=608, device=None):
+    def forward(self, x, targets=None, img_size=608):
         """
         :param x: [num_samples or batch, num_anchors * (6 + 1 + num_classes), grid_size, grid_size]
         :param targets: [num boxes, 8] (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
@@ -128,7 +128,7 @@ class YoloLayer(nn.Module):
         :return:
         """
         self.img_size = img_size
-        self.device = device
+        self.device = x.device
         num_samples, _, _, grid_size = x.size()
 
         prediction = x.view(num_samples, self.num_anchors, self.num_classes + 7, grid_size, grid_size)
