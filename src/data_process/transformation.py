@@ -384,3 +384,54 @@ class Horizontal_Flip(object):
             targets[:, 6] = - targets[:, 6]  # yaw angle flip
 
         return img, targets
+
+
+class Cutout(object):
+    """Randomly mask out one or more patches from an image.
+    Args:
+        n_holes (int): Number of patches to cut out of each image.
+        length (int): The length (in pixels) of each square patch.
+        Refer from: https://github.com/uoguelph-mlrg/Cutout/blob/master/util/cutout.py
+    """
+
+    def __init__(self, n_holes, ratio, fill_value=0., p=1.0):
+        self.n_holes = n_holes
+        self.ratio = ratio
+        assert 0. <= fill_value <= 1., "the fill value is in a range of 0 to 1"
+        self.fill_value = fill_value
+        self.p = p
+
+    def __call__(self, img, targets):
+        """
+        Args:
+            img (Tensor): Tensor image of size (C, H, W).
+        Returns:
+            Tensor: Image with n_holes of dimension length x length cut out of it.
+        """
+        if np.random.random() <= self.p:
+            h = img.size(1)
+            w = img.size(2)
+
+            h_cutout = int(self.ratio * h)
+            w_cutout = int(self.ratio * w)
+
+            for n in range(self.n_holes):
+                y = np.random.randint(h)
+                x = np.random.randint(w)
+
+                y1 = np.clip(y - h_cutout // 2, 0, h)
+                y2 = np.clip(y + h_cutout // 2, 0, h)
+                x1 = np.clip(x - w_cutout // 2, 0, w)
+                x2 = np.clip(x + w_cutout // 2, 0, w)
+
+                img[:, y1: y2, x1: x2] = self.fill_value  # Zero out the selected area
+                # Remove targets that are in the selected area
+                keep_target = []
+                for target_idx, target in enumerate(targets):
+                    _, _, target_x, target_y, target_w, target_l, _, _ = target
+                    if (x1 <= target_x * w <= x2) and (y1 <= target_y * h <= y2):
+                        continue
+                    keep_target.append(target_idx)
+                targets = targets[keep_target]
+
+        return img, targets

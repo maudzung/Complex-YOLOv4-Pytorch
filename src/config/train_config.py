@@ -29,7 +29,7 @@ def parse_train_configs():
     ####################################################################
     parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
-    parser.add_argument('--cfgfile', type=str, default='config/complex_yolov4.cfg', metavar='PATH',
+    parser.add_argument('--cfgfile', type=str, default='config/cfg/complex_yolov4.cfg', metavar='PATH',
                         help='The path for cfgfile (only for darknet)')
     parser.add_argument('--pretrained_path', type=str, default=None, metavar='PATH',
                         help='the path of the pretrained checkpoint')
@@ -39,6 +39,16 @@ def parse_train_configs():
     ####################################################################
     parser.add_argument('--img_size', type=int, default=608,
                         help='the size of input image')
+    parser.add_argument('--hflip_prob', type=float, default=0.5,
+                        help='The probability of horizontal flip')
+    parser.add_argument('--cutout_prob', type=float, default=0.,
+                        help='The probability of cutout augmentation')
+    parser.add_argument('--cutout_nholes', type=int, default=1,
+                        help='The number of cutout area')
+    parser.add_argument('--cutout_ratio', type=float, default=0.3,
+                        help='The max ratio of the cutout area')
+    parser.add_argument('--cutout_fill_value', type=float, default=0.,
+                        help='The fill value in the cut out area, default 0. (black)')
     parser.add_argument('--multiscale_training', action='store_true',
                         help='If true, use scaling data for training')
     parser.add_argument('--mosaic', action='store_true',
@@ -55,8 +65,6 @@ def parse_train_configs():
                         help='mini-batch size (default: 4), this is the total'
                              'batch size of all GPUs on the current node when using'
                              'Data Parallel or Distributed Data Parallel')
-    parser.add_argument('--subdivisions', type=int, default=16,
-                        help='subdivisions during training')
     parser.add_argument('--print_freq', type=int, default=50, metavar='N',
                         help='print frequency (default: 50)')
     parser.add_argument('--tensorboard_freq', type=int, default=20, metavar='N',

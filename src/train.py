@@ -66,6 +66,9 @@ def main_worker(gpu_idx, configs):
 
         dist.init_process_group(backend=configs.dist_backend, init_method=configs.dist_url,
                                 world_size=configs.world_size, rank=configs.rank)
+        configs.subdivisions = int(64 / configs.batch_size / configs.ngpus_per_node)
+    else:
+        configs.subdivisions = int(64 / configs.batch_size)
 
     configs.is_master_node = (not configs.distributed) or (
             configs.distributed and (configs.rank % configs.ngpus_per_node == 0))
@@ -94,7 +97,7 @@ def main_worker(gpu_idx, configs):
         assert os.path.isfile(configs.resume_path), "=> no checkpoint found at '{}'".format(configs.resume_path)
         model.load_state_dict(torch.load(configs.resume_path))
         if logger is not None:
-            logger.info('resume training model from checkpoint {}'.format(configs.pretrained_path))
+            logger.info('resume training model from checkpoint {}'.format(configs.resume_path))
 
     # Data Parallel
     model = make_data_parallel(model, configs)

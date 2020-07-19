@@ -6,7 +6,6 @@
 
 import sys
 import os
-from glob import glob
 import random
 
 import numpy as np
@@ -27,7 +26,7 @@ def resize(image, size):
 
 
 class KittiDataset(Dataset):
-    def __init__(self, dataset_dir, mode='train', aug_transforms=None, hflip_prob=0., multiscale=False,
+    def __init__(self, dataset_dir, mode='train', lidar_transforms=None, aug_transforms=None, multiscale=False,
                  num_samples=None, mosaic=False, random_padding=False):
         self.dataset_dir = dataset_dir
         assert mode in ['train', 'val', 'test'], 'Invalid mode: {}'.format(mode)
@@ -36,6 +35,7 @@ class KittiDataset(Dataset):
         sub_folder = 'testing' if self.is_test else 'training'
 
         self.multiscale = multiscale
+        self.lidar_transforms = lidar_transforms
         self.aug_transforms = aug_transforms
         self.img_size = cnf.BEV_WIDTH
         self.min_size = self.img_size - 3 * 32
@@ -44,8 +44,6 @@ class KittiDataset(Dataset):
         self.mosaic = mosaic
         self.random_padding = random_padding
         self.mosaic_border = [-self.img_size // 2, -self.img_size // 2]
-
-        self.hflip_transform = transformation.Horizontal_Flip(p=hflip_prob) if (hflip_prob > 0) else None
 
         self.lidar_dir = os.path.join(self.dataset_dir, sub_folder, "velodyne")
         self.image_dir = os.path.join(self.dataset_dir, sub_folder, "image_2")
@@ -100,8 +98,8 @@ class KittiDataset(Dataset):
             labels[:, 1:] = transformation.camera_to_lidar_box(labels[:, 1:], calib.V2C, calib.R0,
                                                                calib.P)  # convert rect cam to velo cord
 
-        if self.aug_transforms is not None:
-            lidarData, labels[:, 1:] = self.aug_transforms(lidarData, labels[:, 1:])
+        if self.lidar_transforms is not None:
+            lidarData, labels[:, 1:] = self.lidar_transforms(lidarData, labels[:, 1:])
 
         b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
         rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
@@ -116,8 +114,8 @@ class KittiDataset(Dataset):
 
         rgb_map = torch.from_numpy(rgb_map).float()
 
-        if self.hflip_transform is not None:
-            rgb_map, targets = self.hflip_transform(rgb_map, targets)
+        if self.aug_transforms is not None:
+            rgb_map, targets = self.aug_transforms(rgb_map, targets)
 
         return img_file, rgb_map, targets
 
@@ -224,7 +222,10 @@ class KittiDataset(Dataset):
         if (self.batch_count % 10 == 0) and self.multiscale and (not self.mosaic):
             self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
         # Resize images to input shape
-        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+        if self.img_size != cnf.BEV_WIDTH:
+            imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+        else:
+            imgs = torch.stack(imgs)
         self.batch_count += 1
         return paths, imgs, targets
 

@@ -60,17 +60,18 @@ class Find_Anchors():
     def avg_iou(self):
         return np.mean([np.max(self.compute_iou(i)) for i in range(self.num_boxes)])
 
-    def kmeans(self, k):
+    def kmeans(self, num_anchors):
         # The position of each point in each box
-        distance = np.empty((self.num_boxes, k))
+        distance = np.empty((self.num_boxes, num_anchors))
 
         # Last cluster position
         last_clu = np.zeros((self.num_boxes,))
 
         np.random.seed(0)
 
-        # Randomly select 5 cluster centers
-        self.cluster = self.boxes_wh[np.random.choice(self.num_boxes, k, replace=False)]
+        # Randomly select k cluster centers
+        self.cluster = self.boxes_wh[np.random.choice(self.num_boxes, num_anchors, replace=False)]
+        self.cluster[:, 2] = 0  # Choose yaw = 0
 
         # cluster = random.sample(self.num_boxes, k)
         self.loop_cnt = 0
@@ -80,7 +81,7 @@ class Find_Anchors():
             print('\nThe new cluster of count {} is below:\n'.format(self.loop_cnt))
             for clus_ in self.cluster:
                 w_, h_, yaw_ = clus_
-                print('[{}, {}, {:.2f}],'.format(int(w_), int(h_), yaw_))
+                print('[{}, {}, {:.0f}],'.format(int(w_), int(h_), yaw_))
 
             self.cluster_conners = np.array(
                 [kitti_bev_utils.get_corners(0, 0, clus[0], clus[1], clus[2]) for clus in self.cluster])
@@ -97,8 +98,9 @@ class Find_Anchors():
                 break
 
             # Find the median of each class
-            for j in range(k):
+            for j in range(num_anchors):
                 self.cluster[j] = np.median(self.boxes_wh[near == j], axis=0)
+            self.cluster[:, 2] = 0  # Choose yaw = 0
 
             last_clu = near
 
@@ -163,20 +165,30 @@ class Find_Anchors():
 
 if __name__ == '__main__':
     dataset_dir = '../../dataset/kitti'
-    anchors_num = 9
+    num_anchors = 9
     img_size = 608
     use_yaw_label = True
     anchors_solver = Find_Anchors(dataset_dir, img_size, use_yaw_label=use_yaw_label)
 
     # Use k clustering algorithm
-    anchors_solver.kmeans(anchors_num)
-    anchors_solver.cluster = anchors_solver.cluster[np.argsort(anchors_solver.cluster[:, 0])]
-    print('anchors_solver.cluster: {}'.format(anchors_solver.cluster))
-    print('acc:{:.2f}%'.format(anchors_solver.avg_iou() * 100))
+    anchors_solver.kmeans(num_anchors)
+    areas = anchors_solver.cluster[:, 0] * anchors_solver.cluster[:, 1]
+    anchors_solver.cluster = anchors_solver.cluster[np.argsort(areas)]
+    print('Selected anchors_solver.cluster: ', end='')
+    for clus in anchors_solver.cluster:
+        w_, h_, yaw_ = clus
+        print('{}, {}, {:.0f}'.format(int(w_), int(h_), yaw_), end=', ')
+    print('avg_iou score: {:.2f}%'.format(anchors_solver.avg_iou() * 100))
 
     ############## *************************************************** #############
     #############                RESULTS                               #############
     ############## *************************************************** #############
+
+    #######################################################################################
+    ########### Selected anchors (use_yaw_label=True), fix yaw of anchor = 0 ##############
+    #######################################################################################
+    # 9 anchors: 11, 15, 0, 10, 24, 0, 11, 25, 0, 23, 49, 0, 23, 55, 0, 24, 53, 0, 24, 60, 0, 27, 63, 0, 29, 74, 0, avg_iou score: 46.01%
+    # 6 anchors: 11, 15, 0, 11, 25, 0, 23, 49, 0, 23, 55, 0, 24, 53, 0, 25, 61, 0, avg_iou score: 45.82%
 
     #######################################################################################
     ######################## Finding by using (use_yaw_label=True) #######################

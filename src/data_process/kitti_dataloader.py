@@ -16,18 +16,25 @@ from torch.utils.data import DataLoader
 sys.path.append('../')
 
 from data_process.kitti_dataset import KittiDataset
-from data_process.transformation import OneOf, Random_Rotation, Random_Scaling
+from data_process.transformation import Compose, OneOf, Random_Rotation, Random_Scaling, Horizontal_Flip, Cutout
 
 
 def create_train_dataloader(configs):
     """Create dataloader for training"""
 
-    train_aug_transforms = OneOf([
+    train_lidar_transforms = OneOf([
         Random_Rotation(limit_angle=20., p=1.0),
         Random_Scaling(scaling_range=(0.95, 1.05), p=1.0)
-    ], p=0.6)
-    train_dataset = KittiDataset(configs.dataset_dir, mode='train', aug_transforms=train_aug_transforms,
-                                 hflip_prob=0.5, multiscale=configs.multiscale_training,
+    ], p=0.66)
+
+    train_aug_transforms = Compose([
+        Horizontal_Flip(p=configs.hflip_prob),
+        Cutout(n_holes=configs.cutout_nholes, ratio=configs.cutout_ratio, fill_value=configs.cutout_fill_value,
+               p=configs.cutout_prob)
+    ], p=1.)
+
+    train_dataset = KittiDataset(configs.dataset_dir, mode='train', lidar_transforms=train_lidar_transforms,
+                                 aug_transforms=train_aug_transforms, multiscale=configs.multiscale_training,
                                  num_samples=configs.num_samples, mosaic=configs.mosaic,
                                  random_padding=configs.random_padding)
     train_sampler = None
@@ -42,10 +49,15 @@ def create_train_dataloader(configs):
 
 def create_val_dataloader(configs):
     """Create dataloader for validation"""
-
+    val_aug_transforms = Compose([
+        Horizontal_Flip(p=configs.hflip_prob),
+        Cutout(n_holes=configs.cutout_nholes, ratio=configs.cutout_ratio, fill_value=configs.cutout_fill_value,
+               p=configs.cutout_prob)
+    ], p=1.)
     val_sampler = None
-    val_dataset = KittiDataset(configs.dataset_dir, mode='val', aug_transforms=None, hflip_prob=0.,
-                               multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
+    val_dataset = KittiDataset(configs.dataset_dir, mode='val', lidar_transforms=None,
+                               aug_transforms=val_aug_transforms, multiscale=False, num_samples=configs.num_samples,
+                               mosaic=False, random_padding=False)
     if configs.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
     val_dataloader = DataLoader(val_dataset, batch_size=configs.batch_size, shuffle=False,
@@ -58,7 +70,7 @@ def create_val_dataloader(configs):
 def create_test_dataloader(configs):
     """Create dataloader for testing phase"""
 
-    test_dataset = KittiDataset(configs.dataset_dir, mode='test', aug_transforms=None, hflip_prob=0.,
+    test_dataset = KittiDataset(configs.dataset_dir, mode='test', lidar_transforms=None, aug_transforms=None,
                                 multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
     test_sampler = None
     if configs.distributed:
@@ -87,6 +99,16 @@ if __name__ == '__main__':
 
     parser.add_argument('--img_size', type=int, default=608,
                         help='the size of input image')
+    parser.add_argument('--hflip_prob', type=float, default=0.,
+                        help='The probability of horizontal flip')
+    parser.add_argument('--cutout_prob', type=float, default=0.,
+                        help='The probability of cutout augmentation')
+    parser.add_argument('--cutout_nholes', type=int, default=1,
+                        help='The number of cutout area')
+    parser.add_argument('--cutout_ratio', type=float, default=0.3,
+                        help='The max ratio of the cutout area')
+    parser.add_argument('--cutout_fill_value', type=float, default=0.,
+                        help='The fill value in the cut out area, default 0. (black)')
     parser.add_argument('--multiscale_training', action='store_true',
                         help='If true, use scaling data for training')
     parser.add_argument('--num_samples', type=int, default=None,
@@ -139,7 +161,7 @@ if __name__ == '__main__':
             # Draw rotated box
             bev_utils.drawRotatedBox(img_bev, x, y, w, l, yaw, cnf.colors[int(c)])
 
-        img_bev = cv2.flip(cv2.flip(img_bev, 0), 1)
+        img_bev = cv2.rotate(img_bev, cv2.ROTATE_180)
 
         if configs.mosaic and configs.show_train_data:
             cv2.imshow('mosaic_sample', img_bev)

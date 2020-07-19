@@ -136,12 +136,12 @@ class YoloLayer(nn.Module):
         # prediction size: [num_samples, num_anchors, grid_size, grid_size, num_classes + 7]
 
         # Get outputs
-        x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - 0.5 * (self.scale_x_y - 1)  # Center x
-        y = torch.sigmoid(prediction[..., 1]) * self.scale_x_y - 0.5 * (self.scale_x_y - 1)  # Center y
-        w = prediction[..., 2]  # Width
-        h = prediction[..., 3]  # Height
-        im = prediction[..., 4]  # angle imaginary part
-        re = prediction[..., 5]  # angle real part
+        pred_x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - 0.5 * (self.scale_x_y - 1)  # Center x
+        pred_y = torch.sigmoid(prediction[..., 1]) * self.scale_x_y - 0.5 * (self.scale_x_y - 1)  # Center y
+        pred_w = prediction[..., 2]  # Width
+        pred_h = prediction[..., 3]  # Height
+        pred_im = prediction[..., 4]  # angle imaginary part
+        pred_re = prediction[..., 5]  # angle real part
         pred_conf = torch.sigmoid(prediction[..., 6])  # Conf
         pred_cls = torch.sigmoid(prediction[..., 7:])  # Cls pred.
 
@@ -151,19 +151,19 @@ class YoloLayer(nn.Module):
 
         # Add offset and scale with anchors
         # pred_boxes size: [num_samples, num_anchors, grid_size, grid_size, 6]
-        pred_boxes = torch.empty(prediction[..., :6].shape, device=self.device, dtype=torch.float)
-        pred_boxes[..., 0] = x.detach() + self.grid_x
-        pred_boxes[..., 1] = y.detach() + self.grid_y
-        pred_boxes[..., 2] = torch.exp(w.detach()) * self.anchor_w
-        pred_boxes[..., 3] = torch.exp(h.detach()) * self.anchor_h
-        pred_boxes[..., 4] = im.detach()
-        pred_boxes[..., 5] = re.detach()
+        out_boxes = torch.empty(prediction[..., :6].shape, device=self.device, dtype=torch.float)
+        out_boxes[..., 0] = pred_x.clone().detach() + self.grid_x
+        out_boxes[..., 1] = pred_y.clone().detach() + self.grid_y
+        out_boxes[..., 2] = torch.exp(pred_w.clone().detach()) * self.anchor_w
+        out_boxes[..., 3] = torch.exp(pred_h.clone().detach()) * self.anchor_h
+        out_boxes[..., 4] = pred_im.clone().detach()
+        out_boxes[..., 5] = pred_re.clone().detach()
 
         output = torch.cat((
-            pred_boxes[..., :4].view(num_samples, -1, 4) * self.stride,
-            pred_boxes[..., 4:].view(num_samples, -1, 2),
-            pred_conf.view(num_samples, -1, 1),
-            pred_cls.view(num_samples, -1, self.num_classes),
+            out_boxes[..., :4].view(num_samples, -1, 4) * self.stride,
+            out_boxes[..., 4:6].view(num_samples, -1, 2),
+            pred_conf.clone().view(num_samples, -1, 1),
+            pred_cls.clone().view(num_samples, -1, self.num_classes),
         ), dim=-1)
         # output size: [num_samples, num boxes, 7 + num_classes]
 
@@ -175,12 +175,12 @@ class YoloLayer(nn.Module):
                                                                                              anchors=self.scaled_anchors)
 
             # Loss : Mask outputs to ignore non-existing objects (except with conf. loss)
-            loss_x = self.mse_loss(x[obj_mask], tx[obj_mask])
-            loss_y = self.mse_loss(y[obj_mask], ty[obj_mask])
-            loss_w = self.mse_loss(w[obj_mask], tw[obj_mask])
-            loss_h = self.mse_loss(h[obj_mask], th[obj_mask])
-            loss_im = self.mse_loss(im[obj_mask], tim[obj_mask])
-            loss_re = self.mse_loss(re[obj_mask], tre[obj_mask])
+            loss_x = self.mse_loss(pred_x[obj_mask], tx[obj_mask])
+            loss_y = self.mse_loss(pred_y[obj_mask], ty[obj_mask])
+            loss_w = self.mse_loss(pred_w[obj_mask], tw[obj_mask])
+            loss_h = self.mse_loss(pred_h[obj_mask], th[obj_mask])
+            loss_im = self.mse_loss(pred_im[obj_mask], tim[obj_mask])
+            loss_re = self.mse_loss(pred_re[obj_mask], tre[obj_mask])
             loss_eular = loss_im + loss_re
             loss_conf_obj = self.bce_loss(pred_conf[obj_mask], tconf[obj_mask])
             loss_conf_noobj = self.bce_loss(pred_conf[noobj_mask], tconf[noobj_mask])

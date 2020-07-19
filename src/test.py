@@ -37,7 +37,7 @@ def parse_test_configs():
                         help='The name using for saving logs, models,...')
     parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
-    parser.add_argument('--cfgfile', type=str, default='./config/complex_yolov4.cfg', metavar='PATH',
+    parser.add_argument('--cfgfile', type=str, default='./config/cfg/complex_yolov4.cfg', metavar='PATH',
                         help='The path for cfgfile (only for darknet)')
     parser.add_argument('--pretrained_path', type=str, default=None, metavar='PATH',
                         help='the path of the pretrained checkpoint')

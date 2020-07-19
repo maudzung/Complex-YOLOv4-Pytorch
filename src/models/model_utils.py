@@ -79,7 +79,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Complexer YOLO Implementation')
     parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
-    parser.add_argument('--cfgfile', type=str, default='../config/complex_yolov4.cfg', metavar='PATH',
+    parser.add_argument('--cfgfile', type=str, default='../config/cfg/complex_yolov4.cfg', metavar='PATH',
                         help='The path for cfgfile (only for darknet)')
 
     configs = edict(vars(parser.parse_args()))
