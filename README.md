@@ -84,7 +84,7 @@ python kitti_dataloader.py --show-train-data --mosaic --random-padding --output-
 - To visualize cutout augmentation, let's execute:
 
 ```shell script
-python kitti_dataloader.py --output-width 608 --cutout_prob 1. --cutout_nholes 1 --cutout_fill_value 1. --cutout_ratio 0.3
+python kitti_dataloader.py --show-train-data --cutout_prob 1. --cutout_nholes 1 --cutout_fill_value 1. --cutout_ratio 0.3 --output-width 608
 ```
 
 #### 2.4.2. Inference

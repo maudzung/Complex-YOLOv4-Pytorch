@@ -49,15 +49,9 @@ def create_train_dataloader(configs):
 
 def create_val_dataloader(configs):
     """Create dataloader for validation"""
-    val_aug_transforms = Compose([
-        Horizontal_Flip(p=configs.hflip_prob),
-        Cutout(n_holes=configs.cutout_nholes, ratio=configs.cutout_ratio, fill_value=configs.cutout_fill_value,
-               p=configs.cutout_prob)
-    ], p=1.)
     val_sampler = None
-    val_dataset = KittiDataset(configs.dataset_dir, mode='val', lidar_transforms=None,
-                               aug_transforms=val_aug_transforms, multiscale=False, num_samples=configs.num_samples,
-                               mosaic=False, random_padding=False)
+    val_dataset = KittiDataset(configs.dataset_dir, mode='val', lidar_transforms=None, aug_transforms=None,
+                               multiscale=False, num_samples=configs.num_samples, mosaic=False, random_padding=False)
     if configs.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
     val_dataloader = DataLoader(val_dataset, batch_size=configs.batch_size, shuffle=False,
