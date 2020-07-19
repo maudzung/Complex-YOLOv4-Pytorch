@@ -13,9 +13,9 @@ The PyTorch Implementation based on YOLOv4 of the paper: [Complex-YOLO: Real-tim
 
 ## Features
 - [x] Realtime 3D object detection based on YOLOv4
-- [x] [Distributed Data Parallel Training](https://github.com/pytorch/examples/tree/master/distributed/ddp)
-- [x] TensorboardX
-- [x] Mosaic augmentation for training
+- [x] Support [distributed data parallel training](https://github.com/pytorch/examples/tree/master/distributed/ddp)
+- [x] Tensorboard
+- [x] Mosaic/Cutout augmentation for training
 - [ ] Use [CIoU](https://arxiv.org/pdf/1911.08287.pdf) / [GIoU](https://arxiv.org/pdf/1902.09630v2.pdf) loss for optimization.
 
 ## 2. Getting Started
@@ -81,6 +81,12 @@ By default, there is _**no padding**_ for the output mosaics, the feature could 
 python kitti_dataloader.py --show-train-data --mosaic --random-padding --output-width 608 
 ```
 
+- To visualize cutout augmentation, let's execute:
+
+```shell script
+python kitti_dataloader.py --output-width 608 --cutout_prob 1. --cutout_nholes 1 --cutout_fill_value 1. --cutout_ratio 0.3
+```
+
 #### 2.4.2. Inference
 
 ```shell script
@@ -100,21 +106,13 @@ Download the trained model from [**_here_**](https://drive.google.com/file/d/1gE
 then put it to `${ROOT}/checkpoints/complex_yolov3/complex_yolov3.pth` and execute:
 
 ```shell script
-python evaluate.py --gpu_idx 0 --pretrained_path ../checkpoints/complex_yolov3/complex_yolov3.pth --cfgfile ./config/complex_yolov3.cfg 
+python evaluate.py --gpu_idx 0 --pretrained_path ../checkpoints/complex_yolov3/complex_yolov3.pth --cfgfile ./config/cfg/complex_yolov3.cfg 
 ```
 
 
-- **_(Complex-YOLOv4 trained model will be provided soon. Please watch the repo to get notifications for next update.)_**
+- **_(Complex-YOLOv4 trained model will be released. Please watch the repo to get notifications for next update.)_**
 
-- The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 _(will be updated soon)_. 
-
-Evaluation metrics: **mAP** _(min 0.50 IoU)_
-
-| Model/Class             | Car     | Pedestrian | Cyclist | Average |
-| ----------------------- |:--------|:-----------|:--------|:--------|
-| Complex-YOLO-v2         |    |       |    |    |
-| Complex-YOLO-v3         |    |       |    |    |
-| Complex-YOLO-v4         |    |       |    |    |
+- The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 _(will be updated ASAP)_.
 
 #### 2.4.4. Training
 
@@ -153,13 +151,24 @@ To reproduce the results, you can run the bash shell script
 ./train.sh
 ```
 
+#### Tensorboard
+
+- To track the training progress, go to the `logs/` folder and 
+
+```shell script
+cd logs/<saved_fn>/tensorboard/
+tensorboard --logdir=./
+```
+
+- Then go to [http://localhost:6006/](http://localhost:6006/):
+
 
 ### 2.5. List of usage for Bag of Freebies (BoF) & Bag of Specials (BoS) in this implementation
 
 
 |   |Backbone   | Detector   |
 |---|---|---|
-|**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) <br> [x] Mosaic augmentation|[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random training shapes <br>   |
+|**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) <br> [x] Mosaic/Cutout augmentation|[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random training shapes <br>   |
 |**BoS**   |[x] Mish activation <br> [x] Cross-stage partial connections (CSP) <br> [x] Multi-input weighted residual connections (MiWRC)   |[x] Mish activation <br> [x] SPP-block <br> [x] SAM-block <br> [x] PAN path-aggregation block <br> [ ] CIoU/GIoU loss |
 
 
@@ -214,9 +223,12 @@ ${ROOT}
         └── classes_names.txt
 └── src/
     ├── config/
-    │   ├── complex_yolov4.cfg
-    │   ├── complex_yolov4-tiny.cfg
-    │   ├── config.py
+    ├── cfg/
+        │   ├── complex_yolov3.cfg
+        │   ├── complex_yolov3_tiny.cfg
+        │   ├── complex_yolov4.cfg
+        │   ├── complex_yolov4_tiny.cfg
+    │   ├── train_config.py
     │   └── kitti_config.py
     ├── data_process/
     │   ├── kitti_bev_utils.py
@@ -256,15 +268,19 @@ ${ROOT}
 ```
 usage: train.py [-h] [--seed SEED] [--saved_fn FN] [--working-dir PATH]
                 [-a ARCH] [--cfgfile PATH] [--pretrained_path PATH]
-                [--img_size IMG_SIZE] [--multiscale_training] [--mosaic]
-                [--random-padding] [--no-val] [--num_samples NUM_SAMPLES]
+                [--img_size IMG_SIZE] [--hflip_prob HFLIP_PROB]
+                [--cutout_prob CUTOUT_PROB] [--cutout_nholes CUTOUT_NHOLES]
+                [--cutout_ratio CUTOUT_RATIO]
+                [--cutout_fill_value CUTOUT_FILL_VALUE]
+                [--multiscale_training] [--mosaic] [--random-padding]
+                [--no-val] [--num_samples NUM_SAMPLES]
                 [--num_workers NUM_WORKERS] [--batch_size BATCH_SIZE]
-                [--subdivisions SUBDIVISIONS] [--print_freq N]
-                [--tensorboard_freq N] [--checkpoint_freq N] [--start_epoch N]
-                [--num_epochs N] [--lr LR] [--minimum_lr MIN_LR]
-                [--momentum M] [-wd WD] [--optimizer_type OPTIMIZER]
-                [--burn_in N] [--steps [STEPS [STEPS ...]]] [--world-size N]
-                [--rank N] [--dist-url DIST_URL] [--dist-backend DIST_BACKEND]
+                [--print_freq N] [--tensorboard_freq N] [--checkpoint_freq N]
+                [--start_epoch N] [--num_epochs N] [--lr_type LR_TYPE]
+                [--lr LR] [--minimum_lr MIN_LR] [--momentum M] [-wd WD]
+                [--optimizer_type OPTIMIZER] [--burn_in N]
+                [--steps [STEPS [STEPS ...]]] [--world-size N] [--rank N]
+                [--dist-url DIST_URL] [--dist-backend DIST_BACKEND]
                 [--gpu_idx GPU_IDX] [--no_cuda]
                 [--multiprocessing-distributed] [--evaluate]
                 [--resume_path PATH] [--conf-thresh CONF_THRESH]
@@ -282,6 +298,16 @@ optional arguments:
   --pretrained_path PATH
                         the path of the pretrained checkpoint
   --img_size IMG_SIZE   the size of input image
+  --hflip_prob HFLIP_PROB
+                        The probability of horizontal flip
+  --cutout_prob CUTOUT_PROB
+                        The probability of cutout augmentation
+  --cutout_nholes CUTOUT_NHOLES
+                        The number of cutout area
+  --cutout_ratio CUTOUT_RATIO
+                        The max ratio of the cutout area
+  --cutout_fill_value CUTOUT_FILL_VALUE
+                        The fill value in the cut out area, default 0. (black)
   --multiscale_training
                         If true, use scaling data for training
   --mosaic              If true, compose training samples as mosaics
@@ -295,13 +321,13 @@ optional arguments:
                         mini-batch size (default: 4), this is the totalbatch
                         size of all GPUs on the current node when usingData
                         Parallel or Distributed Data Parallel
-  --subdivisions SUBDIVISIONS
-                        subdivisions during training
   --print_freq N        print frequency (default: 50)
   --tensorboard_freq N  frequency of saving tensorboard (default: 20)
   --checkpoint_freq N   frequency of saving checkpoints (default: 2)
   --start_epoch N       the starting epoch
   --num_epochs N        number of total epochs to run
+  --lr_type LR_TYPE     the type of learning rate scheduler (cosin or
+                        multi_step)
   --lr LR               initial learning rate
   --minimum_lr MIN_LR   minimum learning rate during training
   --momentum M          momentum
