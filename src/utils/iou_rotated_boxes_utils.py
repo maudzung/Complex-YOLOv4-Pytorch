@@ -64,11 +64,12 @@ def get_polygons_fix_xy(boxes, fix_xy=100):
     return ret_polygons
 
 
-def iou_pred_vs_target_boxes(pred_boxes, target_boxes, GIoU=False, DIoU=False, CIoU=False):
+def iou_pred_vs_target_boxes(pred_boxes, target_boxes, nG, GIoU=False, DIoU=False, CIoU=False):
     assert pred_boxes.size() == target_boxes.size(), "Unmatch size of pred_boxes and target_boxes"
     device = pred_boxes.device
     pred_boxes_cpu = to_cpu(pred_boxes).numpy()
     target_boxes_cpu = to_cpu(target_boxes).numpy()
+    target_boxes_cpu[:, :4] *= nG  # scale up x, y, w, l
 
     ious = []
     # Thinking to apply vectorization this step

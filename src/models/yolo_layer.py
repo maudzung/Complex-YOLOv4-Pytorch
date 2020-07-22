@@ -96,13 +96,12 @@ class YoloLayer(nn.Module):
         if n_target_boxes > 0:  # Make sure that there is at least 1 box
             # Convert to position relative to box
             target_boxes = target[:, 2:8]
-            target_boxes[:, :4] *= nG  # only scale x, y, w, l
 
-            gxy = target_boxes[:, :2]
-            gwh = target_boxes[:, 2:4]
+            gxy = target_boxes[:, :2] * nG  # scale up x, y
+            gwh = target_boxes[:, 2:4] * nG  # scale up w, l
             gimre = target_boxes[:, 4:]
 
-            targets_polygons = get_polygons_fix_xy(to_cpu(target_boxes[2:6]).numpy(), fix_xy=100)
+            targets_polygons = get_polygons_fix_xy(to_cpu(target_boxes[:, 2:6] * nG).numpy(), fix_xy=100)
             targets_areas = [polygon_.area for polygon_ in targets_polygons]
 
             # Get anchors with best iou
@@ -137,7 +136,7 @@ class YoloLayer(nn.Module):
             # One-hot encoding of label
             tcls[b, best_n, gj, gi, target_labels] = 1
             class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-            iou_scores[b, best_n, gj, gi] = iou_pred_vs_target_boxes(out_boxes[b, best_n, gj, gi], target_boxes)
+            iou_scores[b, best_n, gj, gi] = iou_pred_vs_target_boxes(out_boxes[b, best_n, gj, gi], target_boxes, nG)
             tconf = obj_mask.float()
 
         return iou_scores, class_mask, obj_mask.type(torch.bool), noobj_mask.type(torch.bool), \
