@@ -1,37 +1,14 @@
 from __future__ import division
 import sys
 import tqdm
-import time
 
 import torch
 import numpy as np
-from shapely.geometry import Polygon
 
 sys.path.append('../')
 
 import data_process.kitti_bev_utils as bev_utils
-
-
-def convert_format(boxes_array):
-    """
-    :param array: an array of shape [# bboxs, 4, 2]
-    :return: a shapely.geometry.Polygon object
-    """
-    polygons = [Polygon([(box[i, 0], box[i, 1]) for i in range(4)]) for box in boxes_array]
-    return np.array(polygons)
-
-
-def compute_iou(box, boxes):
-    """Calculates IoU of the given box with the array of the given boxes.
-    box: a polygon
-    boxes: a vector of polygons
-    Note: the areas are passed in rather than calculated here for
-    efficiency. Calculate once in the caller to avoid duplicate work.
-    """
-    # Calculate intersection areas
-    iou = [box.intersection(b).area / (box.union(b).area + 1e-12) for b in boxes]
-
-    return np.array(iou, dtype=np.float32)
+from utils.iou_rotated_boxes_utils import cvt_box_2_polygon, compute_iou_polygons
 
 
 def compute_iou_nms(idx_self, idx_other, polygons, areas):
@@ -51,10 +28,6 @@ def compute_iou_nms(idx_self, idx_other, polygons, areas):
         ious.append(iou)
 
     return np.array(ious, dtype=np.float32)
-
-
-def to_cpu(tensor):
-    return tensor.detach().cpu()
 
 
 def load_classes(path):
@@ -218,90 +191,6 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
     return batch_metrics
 
 
-def rotated_box_wh_iou_polygon(anchor, wh, imre):
-    device = wh.device
-    w1, h1, im1, re1 = anchor[0], anchor[1], anchor[2], anchor[3]
-
-    wh = wh.t()
-    imre = imre.t()
-    w2, h2, im2, re2 = wh[0], wh[1], imre[0], imre[1]
-
-    anchor_box = torch.tensor([100, 100, w1, h1, im1, re1], device=device, dtype=torch.float).view(-1, 6)
-    target_boxes = torch.full(size=(w2.shape[0], 6), fill_value=100, device=device, dtype=torch.float)
-
-    target_boxes[:, 2] = w2
-    target_boxes[:, 3] = h2
-    target_boxes[:, 4] = im2
-    target_boxes[:, 5] = re2
-
-    ious = rotated_bbox_iou_polygon_vectorize(anchor_box[0], target_boxes)
-
-    return torch.from_numpy(ious)
-
-
-def rotated_box_11_iou_polygon(box1, box2, nG, device):
-    box1_new = torch.full(size=(box1.shape[0], 6), fill_value=0, device=device, dtype=torch.float)
-    box2_new = torch.full(size=(box2.shape[0], 6), fill_value=0, device=device, dtype=torch.float)
-
-    box1_new[:, :4] = box1[:, :4]
-    box1_new[:, 4:] = box1[:, 4:]
-
-    box2_new[:, :4] = box2[:, :4] * nG
-    box2_new[:, 4:] = box2[:, 4:]
-
-    ious = []
-    for i in range(box1_new.shape[0]):
-        bbox1 = box1_new[i]
-        bbox2 = box2_new[i].view(-1, 6)
-        iou = rotated_bbox_iou_polygon_vectorize(bbox1, bbox2).squeeze()
-        ious.append(iou)
-
-    ious = np.array(ious)
-
-    return torch.from_numpy(ious)
-
-
-def rotated_bbox_iou_polygon(box1, box2):
-    box1 = to_cpu(box1).numpy()
-    box2 = to_cpu(box2).numpy()
-
-    x, y, w, l, im, re = box1
-    angle = np.arctan2(im, re)
-    bbox1 = np.array(bev_utils.get_corners(x, y, w, l, angle)).reshape(-1, 4, 2)
-    bbox1 = convert_format(bbox1)
-
-    bbox2 = []
-    for i in range(box2.shape[0]):
-        x, y, w, l, im, re = box2[i, :]
-        angle = np.arctan2(im, re)
-        bev_corners = bev_utils.get_corners(x, y, w, l, angle)
-        bbox2.append(bev_corners)
-    bbox2 = convert_format(np.array(bbox2))
-
-    return compute_iou(bbox1[0], bbox2)
-
-
-def rotated_bbox_iou_polygon_vectorize(box1, box2):
-    """ calculate IoU of polygons with vectorization
-
-    :param box1: (6,)
-    :param box2: (num, 6)
-    :return:
-    """
-    box1 = to_cpu(box1).numpy()
-    box2 = to_cpu(box2).numpy()
-
-    x, y, w, l, im, re = box1
-    angle = np.arctan2(im, re)
-    bbox1 = np.array(bev_utils.get_corners(x, y, w, l, angle)).reshape(-1, 4, 2)
-    bbox1 = convert_format(bbox1)
-
-    bbox2 = bev_utils.get_corners_vectorize(box2)
-    bbox2 = convert_format(bbox2)
-
-    return compute_iou(bbox1[0], bbox2)
-
-
 def rotated_bbox_iou_polygon_cpu(box1, box2):
     """
     :param box1: Numpy array
@@ -312,7 +201,7 @@ def rotated_bbox_iou_polygon_cpu(box1, box2):
     x, y, w, l, im, re = box1
     angle = np.arctan2(im, re)
     bbox1 = np.array(bev_utils.get_corners(x, y, w, l, angle)).reshape(-1, 4, 2)
-    bbox1 = convert_format(bbox1)
+    bbox1 = cvt_box_2_polygon(bbox1)
 
     bbox2 = []
     for i in range(box2.shape[0]):
@@ -320,9 +209,9 @@ def rotated_bbox_iou_polygon_cpu(box1, box2):
         angle = np.arctan2(im, re)
         bev_corners = bev_utils.get_corners(x, y, w, l, angle)
         bbox2.append(bev_corners)
-    bbox2 = convert_format(np.array(bbox2))
+    bbox2 = cvt_box_2_polygon(np.array(bbox2))
 
-    return compute_iou(bbox1[0], bbox2)
+    return compute_iou_polygons(bbox1[0], bbox2)
 
 
 def compute_polygons(boxes):
@@ -336,7 +225,7 @@ def compute_polygons(boxes):
         angle = np.arctan2(im, re)
         bev_corners = bev_utils.get_corners(x, y, w, l, angle)
         polygons.append(bev_corners)
-    polygons = convert_format(np.array(polygons))
+    polygons = cvt_box_2_polygon(np.array(polygons))
 
     return polygons
 

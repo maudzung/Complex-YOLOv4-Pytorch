@@ -1,6 +1,12 @@
 """
 # -*- coding: utf-8 -*-
 -----------------------------------------------------------------------------------
+# Author: Nguyen Mau Dung
+# DoC: 2020.07.05
+# email: nguyenmaudung93.kstn@gmail.com
+-----------------------------------------------------------------------------------
+# Description: This script for the KITTI dataset
+
 # Refer: https://github.com/ghimiredhikura/Complex-YOLOv3
 """
 
@@ -20,11 +26,6 @@ from data_process import transformation, kitti_bev_utils, kitti_data_utils
 import config.kitti_config as cnf
 
 
-def resize(image, size):
-    image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
-    return image
-
-
 class KittiDataset(Dataset):
     def __init__(self, dataset_dir, mode='train', lidar_transforms=None, aug_transforms=None, multiscale=False,
                  num_samples=None, mosaic=False, random_padding=False):
@@ -39,7 +40,7 @@ class KittiDataset(Dataset):
         self.aug_transforms = aug_transforms
         self.img_size = cnf.BEV_WIDTH
         self.min_size = self.img_size - 3 * 32
-        self.max_size = self.img_size
+        self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
         self.mosaic = mosaic
         self.random_padding = random_padding
@@ -106,7 +107,7 @@ class KittiDataset(Dataset):
         target = kitti_bev_utils.build_yolo_target(labels)
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
-        # on image space: targets are formatted as (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
+        # on image space: targets are formatted as (box_idx, class, x, y, w, l, im, re)
         n_target = len(target)
         targets = torch.zeros((n_target, 8))
         if n_target > 0:
@@ -120,7 +121,9 @@ class KittiDataset(Dataset):
         return img_file, rgb_map, targets
 
     def load_mosaic(self, index):
-        """loads images in a mosaic"""
+        """loads images in a mosaic
+        Refer: https://github.com/ultralytics/yolov5/blob/master/utils/datasets.py
+        """
 
         targets_s4 = []
         img_file_s4 = []
@@ -222,11 +225,11 @@ class KittiDataset(Dataset):
         if (self.batch_count % 10 == 0) and self.multiscale and (not self.mosaic):
             self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
         # Resize images to input shape
+        imgs = torch.stack(imgs)
         if self.img_size != cnf.BEV_WIDTH:
-            imgs = torch.stack([resize(img, self.img_size) for img in imgs])
-        else:
-            imgs = torch.stack(imgs)
+            imgs = F.interpolate(imgs, size=self.img_size, mode="linear", align_corners=True)
         self.batch_count += 1
+
         return paths, imgs, targets
 
     def get_image(self, idx):
