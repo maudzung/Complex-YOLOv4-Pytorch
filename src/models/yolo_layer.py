@@ -20,7 +20,7 @@ import torch.nn.functional as F
 sys.path.append('../')
 
 from utils.torch_utils import to_cpu
-from utils.iou_rotated_boxes_utils import iou_rotated_boxes_vs_anchor, iou_pred_vs_target_boxes
+from utils.iou_rotated_boxes_utils import iou_pred_vs_target_boxes, get_polygons_fix_xy, iou_rotated_boxes_vs_anchors
 
 
 class YoloLayer(nn.Module):
@@ -64,6 +64,10 @@ class YoloLayer(nn.Module):
         self.anchor_w = self.scaled_anchors[:, 0:1].view((1, self.num_anchors, 1, 1))
         self.anchor_h = self.scaled_anchors[:, 1:2].view((1, self.num_anchors, 1, 1))
 
+        # Pre compute polygons and areas of anchors
+        self.scaled_anchors_polygons = get_polygons_fix_xy(to_cpu(self.scaled_anchors).numpy(), fix_xy=100)
+        self.scaled_anchors_areas = [polygon_.area for polygon_ in self.scaled_anchors_polygons]
+
     def build_targets(self, out_boxes, pred_cls, target, anchors):
         """ Built yolo targets to compute loss
         :param out_boxes: [num_samples or batch, num_anchors, grid_size, grid_size, 6]
@@ -92,13 +96,18 @@ class YoloLayer(nn.Module):
         if n_target_boxes > 0:  # Make sure that there is at least 1 box
             # Convert to position relative to box
             target_boxes = target[:, 2:8]
+            target_boxes[:, :4] *= nG  # only scale x, y, w, l
 
-            gxy = target_boxes[:, :2] * nG
-            gwh = target_boxes[:, 2:4] * nG
+            gxy = target_boxes[:, :2]
+            gwh = target_boxes[:, 2:4]
             gimre = target_boxes[:, 4:]
 
+            targets_polygons = get_polygons_fix_xy(to_cpu(target_boxes[2:6]).numpy(), fix_xy=100)
+            targets_areas = [polygon_.area for polygon_ in targets_polygons]
+
             # Get anchors with best iou
-            ious = torch.stack([iou_rotated_boxes_vs_anchor(anchor, gwh, gimre) for anchor in anchors])
+            ious = iou_rotated_boxes_vs_anchors(self.scaled_anchors_polygons, self.scaled_anchors_areas,
+                                                targets_polygons, targets_areas)
             best_ious, best_n = ious.max(0)
 
             b, target_labels = target[:, :2].long().t()
@@ -128,7 +137,7 @@ class YoloLayer(nn.Module):
             # One-hot encoding of label
             tcls[b, best_n, gj, gi, target_labels] = 1
             class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-            iou_scores[b, best_n, gj, gi] = iou_pred_vs_target_boxes(out_boxes[b, best_n, gj, gi], target_boxes, nG)
+            iou_scores[b, best_n, gj, gi] = iou_pred_vs_target_boxes(out_boxes[b, best_n, gj, gi], target_boxes)
             tconf = obj_mask.float()
 
         return iou_scores, class_mask, obj_mask.type(torch.bool), noobj_mask.type(torch.bool), \
