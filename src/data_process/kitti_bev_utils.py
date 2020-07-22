@@ -98,35 +98,34 @@ def read_labels_for_bevbox(objects):
 # bev image coordinates format
 def get_corners(x, y, w, l, yaw):
     bev_corners = np.zeros((4, 2), dtype=np.float32)
-
+    cos_yaw = np.cos(yaw)
+    sin_yaw = np.sin(yaw)
     # front left
-    bev_corners[0, 0] = x - w / 2 * np.cos(yaw) - l / 2 * np.sin(yaw)
-    bev_corners[0, 1] = y - w / 2 * np.sin(yaw) + l / 2 * np.cos(yaw)
+    bev_corners[0, 0] = x - w / 2 * cos_yaw - l / 2 * sin_yaw
+    bev_corners[0, 1] = y - w / 2 * sin_yaw + l / 2 * cos_yaw
 
     # rear left
-    bev_corners[1, 0] = x - w / 2 * np.cos(yaw) + l / 2 * np.sin(yaw)
-    bev_corners[1, 1] = y - w / 2 * np.sin(yaw) - l / 2 * np.cos(yaw)
+    bev_corners[1, 0] = x - w / 2 * cos_yaw + l / 2 * sin_yaw
+    bev_corners[1, 1] = y - w / 2 * sin_yaw - l / 2 * cos_yaw
 
     # rear right
-    bev_corners[2, 0] = x + w / 2 * np.cos(yaw) + l / 2 * np.sin(yaw)
-    bev_corners[2, 1] = y + w / 2 * np.sin(yaw) - l / 2 * np.cos(yaw)
+    bev_corners[2, 0] = x + w / 2 * cos_yaw + l / 2 * sin_yaw
+    bev_corners[2, 1] = y + w / 2 * sin_yaw - l / 2 * cos_yaw
 
     # front right
-    bev_corners[3, 0] = x + w / 2 * np.cos(yaw) - l / 2 * np.sin(yaw)
-    bev_corners[3, 1] = y + w / 2 * np.sin(yaw) + l / 2 * np.cos(yaw)
+    bev_corners[3, 0] = x + w / 2 * cos_yaw - l / 2 * sin_yaw
+    bev_corners[3, 1] = y + w / 2 * sin_yaw + l / 2 * cos_yaw
 
     return bev_corners
 
 
-def get_corners_vectorize(box2):
+def get_corners_vectorize(x, y, w, l, yaw):
     """bev image coordinates format - vectorization
 
     :param box2: [num_boxes, 6]
     :return: num_boxes x (x,y) of 4 conners
     """
-    bbox2 = np.zeros((box2.shape[0], 4, 2), dtype=np.float32)
-    x, y, w, l, im, re = box2.transpose(1, 0)
-    yaw = np.arctan2(im, re)
+    bbox2 = np.zeros((x.shape[0], 4, 2), dtype=np.float32)
     cos_yaw = np.cos(yaw)
     sin_yaw = np.sin(yaw)
 

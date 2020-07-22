@@ -29,7 +29,7 @@ def create_optimizer(configs, model):
         optimizer = torch.optim.SGD(train_params, lr=configs.lr, momentum=configs.momentum,
                                     weight_decay=configs.weight_decay, nesterov=True)
     elif configs.optimizer_type == 'adam':
-        optimizer = torch.optim.Adam(train_params, lr=configs.lr, betas=(configs.momentum, 0.999),
+        optimizer = torch.optim.Adam(train_params, lr=configs.lr, betas=(0.9, 0.999),
                                      weight_decay=configs.weight_decay)
     else:
         assert False, "Unknown optimizer type"

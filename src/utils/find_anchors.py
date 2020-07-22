@@ -30,7 +30,7 @@ class Find_Anchors():
         print("number of sample_id_list: {}, num_boxes: {}".format(len(self.sample_id_list), self.num_boxes))
         # Calculate the polygons and areas
         self.boxes_conners = np.array([kitti_bev_utils.get_corners(0, 0, b[0], b[1], b[2]) for b in self.boxes_wh])
-        self.boxes_polygons = [self.convert_format(b) for b in self.boxes_conners]
+        self.boxes_polygons = [self.cvt_box_2_polygon(b) for b in self.boxes_conners]
         self.boxes_areas = [b.area for b in self.boxes_polygons]
         print("Done calculate boxes infor")
 
@@ -47,7 +47,7 @@ class Find_Anchors():
                 boxes_wh.append([int(w * self.img_size), int(l * self.img_size), yaw])
         return np.array(boxes_wh)
 
-    def convert_format(self, box):
+    def cvt_box_2_polygon(self, box):
         return Polygon([(box[i, 0], box[i, 1]) for i in range(4)])
 
     def compute_iou(self, i):
@@ -85,7 +85,7 @@ class Find_Anchors():
 
             self.cluster_conners = np.array(
                 [kitti_bev_utils.get_corners(0, 0, clus[0], clus[1], clus[2]) for clus in self.cluster])
-            self.cluster_polygons = [self.convert_format(clus) for clus in self.cluster_conners]
+            self.cluster_polygons = [self.cvt_box_2_polygon(clus) for clus in self.cluster_conners]
             self.cluster_areas = [clus.area for clus in self.cluster_polygons]
             # Calculate the iou situation at five points from each line.
             for i in range(self.num_boxes):
@@ -244,7 +244,7 @@ if __name__ == '__main__':
 
     # anchors_solver.cluster_conners = np.array(
     #     [kitti_bev_utils.get_corners(0, 0, clus[0], clus[1], clus[2]) for clus in anchors_solver.cluster])
-    # anchors_solver.cluster_polygons = [anchors_solver.convert_format(clus) for clus in anchors_solver.cluster_conners]
+    # anchors_solver.cluster_polygons = [anchors_solver.cvt_box_2_polygon(clus) for clus in anchors_solver.cluster_conners]
     # anchors_solver.cluster_areas = [clus.area for clus in anchors_solver.cluster_polygons]
 
     # anchors_solver.cluster = anchors_solver.cluster[np.argsort(anchors_solver.cluster[:, 0])]

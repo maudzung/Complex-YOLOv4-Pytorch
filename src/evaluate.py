@@ -37,8 +37,8 @@ def evaluate_mAP(val_loader, model, configs, logger):
             _, imgs, targets = batch_data
             # Extract labels
             labels += targets[:, 1].tolist()
-            # Rescale target
-            targets[:, 2:] *= configs.img_size
+            # Rescale x, y, w, h of targets ((box_idx, class, x, y, w, l, im, re))
+            targets[:, 2:6] *= configs.img_size
             imgs = imgs.to(configs.device, non_blocking=True)
 
             outputs = model(imgs)
