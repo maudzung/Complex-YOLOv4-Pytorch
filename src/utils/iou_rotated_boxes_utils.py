@@ -17,6 +17,7 @@ def cvt_box_2_polygon(boxes_array):
     :return: a shapely.geometry.Polygon object
     """
     polygons = [Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]) for box in boxes_array]
+
     return np.array(polygons)
 
 
@@ -33,61 +34,46 @@ def compute_iou_polygons(polygon_1, polygons):
     return np.array(iou, dtype=np.float32)
 
 
-def iou_rotated_boxes_vs_anchor(anchor, wh, imre):
-    """
+def iou_rotated_boxes_vs_anchors(anchors_polygons, anchors_areas, targets_polygons, targets_areas):
+    num_anchors = len(anchors_areas)
+    num_targets_boxes = len(targets_areas)
+    ious = torch.zeros(size=(num_anchors, num_targets_boxes), dtype=torch.float)
+    for ac_idx in range(num_anchors):
+        for tg_idx in range(num_targets_boxes):
+            intersection = anchors_polygons[ac_idx].intersection(targets_polygons[tg_idx]).area
+            iou = intersection / (anchors_areas[ac_idx] + targets_areas[tg_idx] - intersection + 1e-12)
+            ious[ac_idx, tg_idx] = iou
 
+    return ious
+
+
+def get_polygons_fix_xy(boxes, fix_xy=100):
+    """
     Args:
-        anchor: (num anchors, 4)
-        wh: (num_boxes, 2)
-        imre: (num_boxes, 2)
-
-    Returns:
-
+        box: (num_boxes, 4) --> w, l, im, re
     """
-    # last dimension has 6: x, y, w, l, im, re
-    anchor_box = np.full(shape=(anchor.shape[0], 6), fill_value=100, dtype=np.float32)
-    anchor_box[:, 2:6] = to_cpu(anchor).numpy()
 
-    target_boxes = np.full(shape=(wh.shape[0], 6), fill_value=100, dtype=np.float32)
-    target_boxes[:, 2:4] = to_cpu(wh).numpy()
-    target_boxes[:, 4:6] = to_cpu(imre).numpy()
-
-    ious = iou_rotated_boxes(anchor_box[0], target_boxes)
-
-    return torch.from_numpy(ious)
-
-
-def iou_rotated_boxes(box1, box2):
-    """ calculate IoU of polygons with vectorization
-
-    :param box1: (6,)
-    :param box2: (num, 6)
-    :return:
-    """
-    x, y, w, l, im, re = box1
+    n_boxes = boxes.shape[0]
+    x = np.full(shape=(n_boxes,), fill_value=fix_xy, dtype=np.float32)
+    y = np.full(shape=(n_boxes,), fill_value=fix_xy, dtype=np.float32)
+    w, l, im, re = boxes.transpose(1, 0)
     yaw = np.arctan2(im, re)
-    bbox1 = np.array(bev_utils.get_corners(x, y, w, l, yaw)).reshape(-1, 4, 2)
-    box1_polygon = cvt_box_2_polygon(bbox1)
+    ret_conners = bev_utils.get_corners_vectorize(x, y, w, l, yaw)
+    ret_polygons = cvt_box_2_polygon(ret_conners)
 
-    x, y, w, l, im, re = box2.transpose(1, 0)
-    yaw = np.arctan2(im, re)
-    bbox2 = bev_utils.get_corners_vectorize(x, y, w, l, yaw)
-    box2_polygons = cvt_box_2_polygon(bbox2)
-
-    return compute_iou_polygons(box1_polygon[0], box2_polygons)
+    return ret_polygons
 
 
 def iou_pred_vs_target_boxes(pred_boxes, target_boxes, nG, GIoU=False, DIoU=False, CIoU=False):
     assert pred_boxes.size() == target_boxes.size(), "Unmatch size of pred_boxes and target_boxes"
     device = pred_boxes.device
-    pred_boxes_cp = np.copy(to_cpu(pred_boxes).numpy())
-    target_boxes_cp = np.copy(to_cpu(target_boxes).numpy())
-
-    target_boxes_cp[:, :4] = target_boxes_cp[:, :4] * nG
+    pred_boxes_cpu = to_cpu(pred_boxes).numpy()
+    target_boxes_cpu = to_cpu(target_boxes).numpy()
+    target_boxes_cpu[:, :4] *= nG  # scale up x, y, w, l
 
     ious = []
     # Thinking to apply vectorization this step
-    for pred_box, target_box in zip(pred_boxes_cp, target_boxes_cp):
+    for pred_box, target_box in zip(pred_boxes_cpu, target_boxes_cpu):
         iou = iou_rotated_11_boxes(pred_box, target_box)
         if GIoU or DIoU or CIoU:
             raise NotImplementedError
@@ -110,4 +96,5 @@ def iou_rotated_11_boxes(box1, box2):
     bbox2 = bev_utils.get_corners(x, y, w, l, yaw)
     box2_polygon = Polygon([(bbox2[i, 0], bbox2[i, 1]) for i in range(len(bbox2))]).buffer(0)  # to fix a line polygon
     iou = box1_polygon.intersection(box2_polygon).area / (box1_polygon.union(box2_polygon).area + 1e-12)
+
     return iou
