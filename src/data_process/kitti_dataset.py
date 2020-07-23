@@ -227,7 +227,7 @@ class KittiDataset(Dataset):
         # Resize images to input shape
         imgs = torch.stack(imgs)
         if self.img_size != cnf.BEV_WIDTH:
-            imgs = F.interpolate(imgs, size=self.img_size, mode="linear", align_corners=True)
+            imgs = F.interpolate(imgs, size=self.img_size, mode="bilinear", align_corners=True)
         self.batch_count += 1
 
         return paths, imgs, targets
