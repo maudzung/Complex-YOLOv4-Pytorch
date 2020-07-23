@@ -224,8 +224,9 @@ def train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, con
         if tb_writer is not None:
             if (global_step % configs.tensorboard_freq) == 0:
                 tensorboard_log = get_tensorboard_log(model)
-                tensorboard_log['avg_loss'] = losses.avg
-                tb_writer.add_scalars('Train', tensorboard_log, global_step)
+                tb_writer.add_scalar('avg_loss', losses.avg, global_step)
+                for layer_name, layer_dict in tensorboard_log.items():
+                    tb_writer.add_scalars(layer_name, layer_dict, global_step)
 
         # Log message
         if logger is not None:

@@ -119,17 +119,22 @@ def to_python_float(t):
 
 
 def get_tensorboard_log(model):
-    tensorboard_log = {}
     if hasattr(model, 'module'):
         yolo_layers = model.module.yolo_layers
     else:
         yolo_layers = model.yolo_layers
-    for j, yolo_layer in enumerate(yolo_layers):
+
+    tensorboard_log = {}
+    tensorboard_log['Average_All_Layers'] = {}
+    for idx, yolo_layer in enumerate(yolo_layers, start=1):
+        layer_name = 'YOLO_Layer{}'.format(idx)
+        tensorboard_log[layer_name] = {}
         for name, metric in yolo_layer.metrics.items():
-            if j == 0:
-                tensorboard_log['{}'.format(name)] = metric
+            tensorboard_log[layer_name]['{}'.format(name)] = metric
+            if idx == 1:
+                tensorboard_log['Average_All_Layers']['{}'.format(name)] = metric / len(yolo_layers)
             else:
-                tensorboard_log['{}'.format(name)] += metric
+                tensorboard_log['Average_All_Layers']['{}'.format(name)] += metric / len(yolo_layers)
 
     return tensorboard_log
 
