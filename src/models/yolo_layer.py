@@ -36,15 +36,12 @@ class YoloLayer(nn.Module):
         self.scale_x_y = scale_x_y
         self.ignore_thresh = ignore_thresh
 
-        self.noobj_scale = 100
+        self.noobj_scale = 1
         self.obj_scale = 1
-        # self.lbox_scale = 3.54
-        # self.lobj_scale = 64.3
-        # self.lcls_scale = 37.4
-        self.lbox_scale = 1.
-        self.lobj_scale = 1.
-        self.lcls_scale = 1.
-        self.leular_scale = 1.
+        self.lbox_scale = 3.54
+        self.lobj_scale = 64.3
+        self.lcls_scale = 37.4
+        self.leular_scale = 3.54
 
         self.seen = 0
         # Initialize dummy variables
@@ -179,8 +176,8 @@ class YoloLayer(nn.Module):
         out_boxes = torch.empty(prediction[..., :6].shape, device=self.device, dtype=torch.float)
         out_boxes[..., 0] = pred_x.clone().detach() + self.grid_x
         out_boxes[..., 1] = pred_y.clone().detach() + self.grid_y
-        out_boxes[..., 2] = torch.exp(pred_w.clone().detach()) * self.anchor_w
-        out_boxes[..., 3] = torch.exp(pred_h.clone().detach()) * self.anchor_h
+        out_boxes[..., 2] = torch.exp(pred_w.clone().detach()).clamp(1E3) * self.anchor_w
+        out_boxes[..., 3] = torch.exp(pred_h.clone().detach()).clamp(1E3) * self.anchor_h
         out_boxes[..., 4] = pred_im.clone().detach()
         out_boxes[..., 5] = pred_re.clone().detach()
 
