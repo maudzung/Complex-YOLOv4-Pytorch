@@ -44,6 +44,7 @@ class YoloLayer(nn.Module):
         self.lbox_scale = 1.
         self.lobj_scale = 1.
         self.lcls_scale = 1.
+        self.leular_scale = 1.
 
         self.seen = 0
         # Initialize dummy variables
@@ -92,6 +93,7 @@ class YoloLayer(nn.Module):
         tre = torch.full(size=(nB, nA, nG, nG), fill_value=0, device=self.device, dtype=torch.float)
         tcls = torch.full(size=(nB, nA, nG, nG, nC), fill_value=0, device=self.device, dtype=torch.float)
         tconf = obj_mask.float()
+        iou_losses = torch.zeros(size=(1,), device=self.device, dtype=torch.float)
 
         if n_target_boxes > 0:  # Make sure that there is at least 1 box
             # Convert to position relative to box
@@ -136,10 +138,11 @@ class YoloLayer(nn.Module):
             # One-hot encoding of label
             tcls[b, best_n, gj, gi, target_labels] = 1
             class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-            iou_scores[b, best_n, gj, gi] = iou_pred_vs_target_boxes(out_boxes[b, best_n, gj, gi], target_boxes, nG)
+            ious, iou_losses = iou_pred_vs_target_boxes(out_boxes[b, best_n, gj, gi], target_boxes, nG, GIoU=True)
+            iou_scores[b, best_n, gj, gi] = ious
             tconf = obj_mask.float()
 
-        return iou_scores, class_mask, obj_mask.type(torch.bool), noobj_mask.type(torch.bool), \
+        return iou_scores, iou_losses, class_mask, obj_mask.type(torch.bool), noobj_mask.type(torch.bool), \
                tx, ty, tw, th, tim, tre, tcls, tconf
 
     def forward(self, x, targets=None, img_size=608):
@@ -193,17 +196,21 @@ class YoloLayer(nn.Module):
             return output, 0
         else:
             reduction = 'mean'
-            iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(
+            iou_scores, iou_losses, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(
                 out_boxes=out_boxes, pred_cls=pred_cls, target=targets, anchors=self.scaled_anchors)
 
-            iou_masked = iou_scores[obj_mask]  # size: (n_target_boxes,)
-            loss_box = (1. - iou_masked).sum() if reduction == 'sum' else (1. - iou_masked).mean()
+            loss_box = iou_losses.sum() if reduction == 'sum' else iou_losses.mean()
+            loss_im = F.mse_loss(pred_im[obj_mask], tim[obj_mask], reduction=reduction)
+            loss_re = F.mse_loss(pred_re[obj_mask], tre[obj_mask], reduction=reduction)
+            loss_im_re = (1. - torch.sqrt(pred_im[obj_mask] ** 2 + pred_re[obj_mask] ** 2)) ** 2  # as tim^2 + tre^2 = 1
+            loss_im_re_red = loss_im_re.sum() if reduction == 'sum' else loss_im_re.mean()
+            loss_eular = loss_im + loss_re + loss_im_re_red
 
             loss_conf_obj = F.binary_cross_entropy(pred_conf[obj_mask], tconf[obj_mask], reduction=reduction)
             loss_conf_noobj = F.binary_cross_entropy(pred_conf[noobj_mask], tconf[noobj_mask], reduction=reduction)
             loss_obj = self.obj_scale * loss_conf_obj + self.noobj_scale * loss_conf_noobj
             loss_cls = F.binary_cross_entropy(pred_cls[obj_mask], tcls[obj_mask], reduction=reduction)
-            total_loss = loss_box * self.lbox_scale + loss_obj * self.lobj_scale + loss_cls * self.lcls_scale
+            total_loss = loss_box * self.lbox_scale + loss_obj * self.lobj_scale + loss_cls * self.lcls_scale + loss_eular * self.leular_scale
 
             # Metrics (store loss values using tensorboard)
             cls_acc = 100 * class_mask[obj_mask].mean()
@@ -216,9 +223,13 @@ class YoloLayer(nn.Module):
             precision = torch.sum(iou50 * detected_mask) / (conf50.sum() + 1e-16)
             recall50 = torch.sum(iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
             recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
+
             self.metrics = {
                 "loss": to_cpu(total_loss).item(),
                 'loss_box': to_cpu(loss_box).item(),
+                'loss_eular': to_cpu(loss_eular).item(),
+                'loss_im': to_cpu(loss_im).item(),
+                'loss_re': to_cpu(loss_re).item(),
                 "loss_obj": to_cpu(loss_obj).item(),
                 "loss_cls": to_cpu(loss_cls).item(),
                 "cls_acc": to_cpu(cls_acc).item(),

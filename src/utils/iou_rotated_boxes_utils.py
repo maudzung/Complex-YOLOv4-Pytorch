@@ -4,6 +4,7 @@ import sys
 import torch
 import numpy as np
 from shapely.geometry import Polygon
+from scipy.spatial import ConvexHull
 
 sys.path.append('../')
 
@@ -16,7 +17,9 @@ def cvt_box_2_polygon(boxes_array):
     :param array: an array of shape [# bboxs, 4, 2]
     :return: a shapely.geometry.Polygon object
     """
-    polygons = [Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]) for box in boxes_array]
+    # use .buffer(0) to fix a line polygon
+    # more infor: https://stackoverflow.com/questions/13062334/polygon-intersection-error-in-shapely-shapely-geos-topologicalerror-the-opera
+    polygons = [Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]).buffer(0) for box in boxes_array]
 
     return np.array(polygons)
 
@@ -71,30 +74,44 @@ def iou_pred_vs_target_boxes(pred_boxes, target_boxes, nG, GIoU=False, DIoU=Fals
     target_boxes_cpu = to_cpu(target_boxes).numpy()
     target_boxes_cpu[:, :4] *= nG  # scale up x, y, w, l
 
+    x, y, w, l, im, re = target_boxes_cpu.transpose(1, 0)
+    yaw = np.arctan2(im, re)
+    target_conners = bev_utils.get_corners_vectorize(x, y, w, l, yaw)
+    target_polygons = cvt_box_2_polygon(target_conners)
+    target_areas = [polygon_.area for polygon_ in target_polygons]
+
+    x, y, w, l, im, re = pred_boxes_cpu.transpose(1, 0)
+    yaw = np.arctan2(im, re)
+    pred_conners = bev_utils.get_corners_vectorize(x, y, w, l, yaw)
+    pred_polygons = cvt_box_2_polygon(pred_conners)
+    pred_areas = [polygon_.area for polygon_ in pred_polygons]
+
     ious = []
+    iou_losses = []
+    n_boxes = target_boxes_cpu.shape[0]
     # Thinking to apply vectorization this step
-    for pred_box, target_box in zip(pred_boxes_cpu, target_boxes_cpu):
-        iou = iou_rotated_11_boxes(pred_box, target_box)
-        if GIoU or DIoU or CIoU:
+    for box_idx in range(n_boxes):
+        pred_cons, t_cons = pred_conners[box_idx], target_conners[box_idx]
+        pred_poly, t_poly = pred_polygons[box_idx], target_polygons[box_idx]
+        pred_area, t_area = pred_areas[box_idx], target_areas[box_idx]
+        intersection = pred_poly.intersection(t_poly).area
+        union = pred_area + t_area - intersection
+        iou = intersection / (union + 1e-16)
+
+        if GIoU:
+            convex_conners = np.concatenate((pred_cons, t_cons))
+            hull = ConvexHull(convex_conners)
+            convex_conners = convex_conners[hull.vertices]
+            convex_polygon = Polygon([(convex_conners[i, 0], convex_conners[i, 1]) for i in range(len(convex_conners))]).buffer(0)
+            convex_area = convex_polygon.area
+            l_iou = 1. - (iou - (convex_area - union) / (convex_area + 1e-16))
+        else:
+            l_iou = 1. - iou
+
+        if DIoU or CIoU:
             raise NotImplementedError
 
         ious.append(iou)
+        iou_losses.append(l_iou)
 
-    return torch.tensor(ious, device=device, dtype=torch.float)
-
-
-def iou_rotated_11_boxes(box1, box2):
-    x, y, w, l, im, re = box1
-    yaw = np.arctan2(im, re)
-    bbox1 = bev_utils.get_corners(x, y, w, l, yaw)
-    # use .buffer(0) to fix a line polygon
-    # more infor: https://stackoverflow.com/questions/13062334/polygon-intersection-error-in-shapely-shapely-geos-topologicalerror-the-opera
-    box1_polygon = Polygon([(bbox1[i, 0], bbox1[i, 1]) for i in range(len(bbox1))]).buffer(0)
-
-    x, y, w, l, im, re = box2
-    yaw = np.arctan2(im, re)
-    bbox2 = bev_utils.get_corners(x, y, w, l, yaw)
-    box2_polygon = Polygon([(bbox2[i, 0], bbox2[i, 1]) for i in range(len(bbox2))]).buffer(0)  # to fix a line polygon
-    iou = box1_polygon.intersection(box2_polygon).area / (box1_polygon.union(box2_polygon).area + 1e-12)
-
-    return iou
+    return torch.tensor(ious, device=device, dtype=torch.float), torch.tensor(iou_losses, device=device, dtype=torch.float)
