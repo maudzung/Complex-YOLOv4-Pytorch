@@ -51,8 +51,13 @@ For 3D point cloud preprocessing, please refer to the previous works:
 
 ![architecture](./docs/complex_yolo_architecture.PNG)
 
-This work has been based on YOLOv4 for 2D object detection. Please refer to [the original paper of YOLOv4](https://arxiv.org/abs/2004.10934) 
-and [the Pytorch implementation](https://github.com/Tianxiaomo/pytorch-YOLOv4) which is the great work from *Tianxiaomo*
+This work has been based on the paper [YOLOv4: Optimal Speed and Accuracy of Object Detection](https://arxiv.org/abs/2004.10934).
+
+Please refer to several implementations of YOLOv4 using PyTorch DL framework:
+- [Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)
+- [Ultralytics/yolov3_and_v4](https://github.com/ultralytics/yolov3)
+- [WongKinYiu/PyTorch_YOLOv4](https://github.com/WongKinYiu/PyTorch_YOLOv4)
+- [VCasecnikovs/Yet-Another-YOLOv4-Pytorch](https://github.com/VCasecnikovs/Yet-Another-YOLOv4-Pytorch)
 
 ### 2.4. How to run
 
