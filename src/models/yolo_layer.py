@@ -39,7 +39,7 @@ class YoloLayer(nn.Module):
 
         self.noobj_scale = 1
         self.obj_scale = 1
-        self.lbox_scale = 3.54
+        self.lgiou_scale = 3.54
         self.lobj_scale = 64.3
         self.lcls_scale = 37.4
         self.leular_scale = 3.54
@@ -174,8 +174,8 @@ class YoloLayer(nn.Module):
         pred_boxes = torch.empty(prediction[..., :6].shape, device=self.device, dtype=torch.float)
         pred_boxes[..., 0] = pred_x + self.grid_x
         pred_boxes[..., 1] = pred_y + self.grid_y
-        pred_boxes[..., 2] = torch.exp(pred_w).clamp(1E3) * self.anchor_w
-        pred_boxes[..., 3] = torch.exp(pred_h).clamp(1E3) * self.anchor_h
+        pred_boxes[..., 2] = torch.exp(pred_w).clamp(max=1E3) * self.anchor_w
+        pred_boxes[..., 3] = torch.exp(pred_h).clamp(max=1E3) * self.anchor_h
         pred_boxes[..., 4] = pred_im
         pred_boxes[..., 5] = pred_re
 
@@ -194,7 +194,7 @@ class YoloLayer(nn.Module):
             iou_scores, giou_loss, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(
                 pred_boxes=pred_boxes, pred_cls=pred_cls, target=targets, anchors=self.scaled_anchors)
 
-            loss_box = giou_loss
+            iou_score_mean = iou_scores[obj_mask].mean()
             loss_im = F.mse_loss(pred_im[obj_mask], tim[obj_mask], reduction=self.reduction)
             loss_re = F.mse_loss(pred_re[obj_mask], tre[obj_mask], reduction=self.reduction)
             loss_im_re = (1. - torch.sqrt(pred_im[obj_mask] ** 2 + pred_re[obj_mask] ** 2)) ** 2  # as tim^2 + tre^2 = 1
@@ -205,7 +205,7 @@ class YoloLayer(nn.Module):
             loss_conf_noobj = F.binary_cross_entropy(pred_conf[noobj_mask], tconf[noobj_mask], reduction=self.reduction)
             loss_obj = self.obj_scale * loss_conf_obj + self.noobj_scale * loss_conf_noobj
             loss_cls = F.binary_cross_entropy(pred_cls[obj_mask], tcls[obj_mask], reduction=self.reduction)
-            total_loss = loss_box * self.lbox_scale + loss_obj * self.lobj_scale + loss_cls * self.lcls_scale + loss_eular * self.leular_scale
+            total_loss = giou_loss * self.lgiou_scale + loss_obj * self.lobj_scale + loss_cls * self.lcls_scale + loss_eular * self.leular_scale
 
             # Metrics (store loss values using tensorboard)
             cls_acc = 100 * class_mask[obj_mask].mean()
@@ -221,7 +221,8 @@ class YoloLayer(nn.Module):
 
             self.metrics = {
                 "loss": to_cpu(total_loss).item(),
-                'loss_box': to_cpu(loss_box).item(),
+                "iou_score": to_cpu(iou_score_mean).item(),
+                'giou_loss': to_cpu(giou_loss).item(),
                 'loss_eular': to_cpu(loss_eular).item(),
                 'loss_im': to_cpu(loss_im).item(),
                 'loss_re': to_cpu(loss_re).item(),
