@@ -23,7 +23,12 @@ def cvt_box_2_polygon(box):
     """
     # use .buffer(0) to fix a line polygon
     # more infor: https://stackoverflow.com/questions/13062334/polygon-intersection-error-in-shapely-shapely-geos-topologicalerror-the-opera
-    return Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]).buffer(0)
+    try:
+        polygon = Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))])
+    except:
+        polygon = None
+
+    return polygon
 
 
 def get_corners_vectorize(x, y, w, l, yaw):
@@ -83,7 +88,10 @@ def iou_rotated_boxes_targets_vs_anchors(anchors_polygons, anchors_areas, target
 
     for a_idx in range(num_anchors):
         for tg_idx in range(num_targets_boxes):
-            intersection = anchors_polygons[a_idx].intersection(targets_polygons[tg_idx]).area
+            if (anchors_polygons[a_idx] is not None) and (targets_polygons[tg_idx] is not None):
+                intersection = anchors_polygons[a_idx].intersection(targets_polygons[tg_idx]).area
+            else:
+                intersection = 0.
             iou = intersection / (anchors_areas[a_idx] + targets_areas[tg_idx] - intersection + 1e-16)
             ious[a_idx, tg_idx] = iou
 
@@ -111,17 +119,28 @@ def iou_pred_vs_target_boxes(pred_boxes, target_boxes, GIoU=False, DIoU=False, C
     for box_idx in range(n_boxes):
         pred_cons, t_cons = pred_conners[box_idx], target_conners[box_idx]
         pred_area, t_area = pred_areas[box_idx], target_areas[box_idx]
-        intersection = cvt_box_2_polygon(pred_cons).intersection(cvt_box_2_polygon(t_cons)).area
+        pred_poly = cvt_box_2_polygon(pred_cons)
+        t_poly = cvt_box_2_polygon(t_cons)
+
+        if (pred_poly is not None) and (t_poly is not None):
+            intersection = pred_poly.intersection(t_poly).area
+        else:
+            intersection = 0.
         union = pred_area + t_area - intersection
         iou = intersection / (union + 1e-16)
 
         if GIoU:
-            convex_conners = torch.cat((pred_cons, t_cons), dim=0)
-            hull = ConvexHull(convex_conners.clone().detach().cpu().numpy())  # done on cpu, just need indices output
-            convex_conners = convex_conners[hull.vertices]
-            convex_polygon = cvt_box_2_polygon(convex_conners)
-            convex_area = convex_polygon.area
-            giou_loss += 1. - (iou - (convex_area - union) / (convex_area + 1e-16))
+            try:
+                convex_conners = torch.cat((pred_cons, t_cons), dim=0)
+                hull = ConvexHull(
+                    convex_conners.clone().detach().cpu().numpy())  # done on cpu, just need indices output
+                convex_conners = convex_conners[hull.vertices]
+                convex_polygon = cvt_box_2_polygon(convex_conners)
+                convex_area = convex_polygon.area if convex_polygon is not None else 0.
+                giou_loss += 1. - (iou - (convex_area - union) / (convex_area + 1e-16))
+            except:
+                giou_loss += 2.
+                print('giou_loss - ValueError: Points cannot contain NaN')
         else:
             giou_loss += 1. - iou
 
