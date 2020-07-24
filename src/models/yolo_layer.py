@@ -20,7 +20,8 @@ import torch.nn.functional as F
 sys.path.append('../')
 
 from utils.torch_utils import to_cpu
-from utils.iou_rotated_boxes_utils import iou_pred_vs_target_boxes, iou_rotated_boxes_targets_vs_anchors
+from utils.iou_rotated_boxes_utils import iou_pred_vs_target_boxes, iou_rotated_boxes_targets_vs_anchors, \
+    get_polygons_areas_fix_xy
 
 
 class YoloLayer(nn.Module):
@@ -62,6 +63,9 @@ class YoloLayer(nn.Module):
         self.anchor_w = self.scaled_anchors[:, 0:1].view((1, self.num_anchors, 1, 1))
         self.anchor_h = self.scaled_anchors[:, 1:2].view((1, self.num_anchors, 1, 1))
 
+        # Pre compute polygons and areas of anchors
+        self.scaled_anchors_polygons, self.scaled_anchors_areas = get_polygons_areas_fix_xy(self.scaled_anchors)
+
     def build_targets(self, pred_boxes, pred_cls, target, anchors):
         """ Built yolo targets to compute loss
         :param out_boxes: [num_samples or batch, num_anchors, grid_size, grid_size, 6]
@@ -89,18 +93,18 @@ class YoloLayer(nn.Module):
         giou_loss = torch.tensor([0.], device=self.device, dtype=torch.float)
 
         if n_target_boxes > 0:  # Make sure that there is at least 1 box
-            # Convert to position relative to box
+            b, target_labels = target[:, :2].long().t()
             target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:8]), dim=-1)  # scale up x, y, w, h
 
             gxy = target_boxes[:, :2]
             gwh = target_boxes[:, 2:4]
-            gimre = target_boxes[:, 4:]
+            gimre = target_boxes[:, 4:6]
 
+            targets_polygons, targets_areas = get_polygons_areas_fix_xy(target_boxes[:, 2:6])
             # Get anchors with best iou
-            ious = iou_rotated_boxes_targets_vs_anchors(target_boxes[:, 2:6], self.scaled_anchors, fix_xy=100)
+            ious = iou_rotated_boxes_targets_vs_anchors(self.scaled_anchors_polygons, self.scaled_anchors_areas,
+                                                        targets_polygons, targets_areas)
             best_ious, best_n = ious.max(0)
-
-            b, target_labels = target[:, :2].long().t()
 
             gx, gy = gxy.t()
             gw, gh = gwh.t()
