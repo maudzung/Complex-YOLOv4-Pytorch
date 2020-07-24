@@ -14,7 +14,6 @@ import numpy as  np
 
 sys.path.append('../')
 
-from models.region_loss import RegionLoss
 from models.yolo_layer import YoloLayer
 from models.darknet_utils import parse_cfg, print_cfg, load_fc, load_conv_bn, load_conv
 from utils.torch_utils import to_cpu
@@ -156,12 +155,6 @@ class Darknet(nn.Module):
 
         self.loss = self.models[len(self.models) - 1]
 
-        if self.blocks[(len(self.blocks) - 1)]['type'] == 'region':
-            self.anchors = self.loss.anchors
-            self.num_anchors = self.loss.num_anchors
-            self.anchor_step = self.loss.anchor_step
-            self.num_classes = self.loss.num_classes
-
         self.header = torch.IntTensor([0, 0, 0, 0])
         self.seen = 0
 
@@ -223,13 +216,6 @@ class Darknet(nn.Module):
                 elif activation == 'relu':
                     x = F.relu(x, inplace=True)
                 outputs[ind] = x
-            elif block['type'] == 'region':
-                continue
-                if self.loss:
-                    self.loss = self.loss + self.models[ind](x)
-                else:
-                    self.loss = self.models[ind](x)
-                outputs[ind] = None
             elif block['type'] == 'yolo':
                 x, layer_loss = self.models[ind](x, targets, img_size)
                 loss += layer_loss
@@ -390,20 +376,6 @@ class Darknet(nn.Module):
                 out_filters.append(prev_filters)
                 out_strides.append(prev_stride)
                 models.append(model)
-            elif block['type'] == 'region':
-                loss = RegionLoss()
-                anchors = block['anchors'].split(',')
-                loss.anchors = [float(i) for i in anchors]
-                loss.num_classes = int(block['classes'])
-                loss.num_anchors = int(block['num'])
-                loss.anchor_step = len(loss.anchors) // loss.num_anchors
-                loss.object_scale = float(block['object_scale'])
-                loss.noobject_scale = float(block['noobject_scale'])
-                loss.class_scale = float(block['class_scale'])
-                loss.coord_scale = float(block['coord_scale'])
-                out_filters.append(prev_filters)
-                out_strides.append(prev_stride)
-                models.append(loss)
             elif block['type'] == 'yolo':
                 anchor_masks = [int(i) for i in block['mask'].split(',')]
                 anchors = [float(i) for i in block['anchors'].split(',')]
@@ -465,8 +437,6 @@ class Darknet(nn.Module):
             elif block['type'] == 'route':
                 pass
             elif block['type'] == 'shortcut':
-                pass
-            elif block['type'] == 'region':
                 pass
             elif block['type'] == 'yolo':
                 pass

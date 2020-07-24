@@ -119,35 +119,6 @@ def get_corners(x, y, w, l, yaw):
     return bev_corners
 
 
-def get_corners_vectorize(x, y, w, l, yaw):
-    """bev image coordinates format - vectorization
-
-    :param box2: [num_boxes, 6]
-    :return: num_boxes x (x,y) of 4 conners
-    """
-    bbox2 = np.zeros((x.shape[0], 4, 2), dtype=np.float32)
-    cos_yaw = np.cos(yaw)
-    sin_yaw = np.sin(yaw)
-
-    # front left
-    bbox2[:, 0, 0] = x - w / 2 * cos_yaw - l / 2 * sin_yaw
-    bbox2[:, 0, 1] = y - w / 2 * sin_yaw + l / 2 * cos_yaw
-
-    # rear left
-    bbox2[:, 1, 0] = x - w / 2 * cos_yaw + l / 2 * sin_yaw
-    bbox2[:, 1, 1] = y - w / 2 * sin_yaw - l / 2 * cos_yaw
-
-    # rear right
-    bbox2[:, 2, 0] = x + w / 2 * cos_yaw + l / 2 * sin_yaw
-    bbox2[:, 2, 1] = y + w / 2 * sin_yaw - l / 2 * cos_yaw
-
-    # front right
-    bbox2[:, 3, 0] = x + w / 2 * cos_yaw - l / 2 * sin_yaw
-    bbox2[:, 3, 1] = y + w / 2 * sin_yaw + l / 2 * cos_yaw
-
-    return bbox2
-
-
 def build_yolo_target(labels):
     bc = cnf.boundary
     target = []

@@ -4,11 +4,36 @@ import tqdm
 
 import torch
 import numpy as np
+from shapely.geometry import Polygon
 
 sys.path.append('../')
 
 import data_process.kitti_bev_utils as bev_utils
-from utils.iou_rotated_boxes_utils import cvt_box_2_polygon, compute_iou_polygons
+
+
+def cvt_box_2_polygon(boxes_array):
+    """
+    :param array: an array of shape [# bboxs, 4, 2]
+    :return: a shapely.geometry.Polygon object
+    """
+    # use .buffer(0) to fix a line polygon
+    # more infor: https://stackoverflow.com/questions/13062334/polygon-intersection-error-in-shapely-shapely-geos-topologicalerror-the-opera
+    polygons = [Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]).buffer(0) for box in boxes_array]
+
+    return np.array(polygons)
+
+
+def compute_iou_polygons(polygon_1, polygons):
+    """Calculates IoU of the given box with the array of the given boxes.
+    box: a polygon
+    boxes: a vector of polygons
+    Note: the areas are passed in rather than calculated here for
+    efficiency. Calculate once in the caller to avoid duplicate work.
+    """
+    # Calculate intersection areas
+    iou = [polygon_1.intersection(poly_).area / (polygon_1.union(poly_).area + 1e-12) for poly_ in polygons]
+
+    return np.array(iou, dtype=np.float32)
 
 
 def compute_iou_nms(idx_self, idx_other, polygons, areas):
