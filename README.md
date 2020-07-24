@@ -16,7 +16,8 @@ The PyTorch Implementation based on YOLOv4 of the paper: [Complex-YOLO: Real-tim
 - [x] Support [distributed data parallel training](https://github.com/pytorch/examples/tree/master/distributed/ddp)
 - [x] Tensorboard
 - [x] Mosaic/Cutout augmentation for training
-- [ ] Use [CIoU](https://arxiv.org/pdf/1911.08287.pdf) / [GIoU](https://arxiv.org/pdf/1902.09630v2.pdf) loss for optimization.
+- [x] Use [GIoU](https://arxiv.org/pdf/1902.09630v2.pdf) loss of rotated boxes for optimization.
+- [ ] Use [CIoU](https://arxiv.org/pdf/1911.08287.pdf) loss of rotated boxes for optimization.
 
 ## 2. Getting Started
 ### 2.1. Requirement
@@ -174,7 +175,7 @@ tensorboard --logdir=./
 |   |Backbone   | Detector   |
 |---|---|---|
 |**BoF**   |[x] Dropblock <br> [x] Random rescale, rotation (global) <br> [x] Mosaic/Cutout augmentation|[x] Cross mini-Batch Normalization <br>[x] Dropblock <br> [x] Random training shapes <br>   |
-|**BoS**   |[x] Mish activation <br> [x] Cross-stage partial connections (CSP) <br> [x] Multi-input weighted residual connections (MiWRC)   |[x] Mish activation <br> [x] SPP-block <br> [x] SAM-block <br> [x] PAN path-aggregation block <br> [ ] CIoU/GIoU loss |
+|**BoS**   |[x] Mish activation <br> [x] Cross-stage partial connections (CSP) <br> [x] Multi-input weighted residual connections (MiWRC)   |[x] Mish activation <br> [x] SPP-block <br> [x] SAM-block <br> [x] PAN path-aggregation block <br> [x] GIoU loss <br> [ ] CIoU loss |
 
 
 ## Contact
