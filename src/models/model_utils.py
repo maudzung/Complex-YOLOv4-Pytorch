@@ -21,7 +21,7 @@ def create_model(configs):
     """Create model based on architecture name"""
     if (configs.arch == 'darknet') and (configs.cfgfile is not None):
         print('using darknet')
-        model = Darknet(cfgfile=configs.cfgfile)
+        model = Darknet(cfgfile=configs.cfgfile, use_giou_loss=configs.use_giou_loss)
     else:
         assert False, 'Undefined model backbone'
 

@@ -23,12 +23,7 @@ def cvt_box_2_polygon(box):
     """
     # use .buffer(0) to fix a line polygon
     # more infor: https://stackoverflow.com/questions/13062334/polygon-intersection-error-in-shapely-shapely-geos-topologicalerror-the-opera
-    try:
-        polygon = Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))])
-    except:
-        polygon = None
-
-    return polygon
+    return Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]).buffer(0)
 
 
 def get_corners_vectorize(x, y, w, l, yaw):
@@ -88,10 +83,7 @@ def iou_rotated_boxes_targets_vs_anchors(anchors_polygons, anchors_areas, target
 
     for a_idx in range(num_anchors):
         for tg_idx in range(num_targets_boxes):
-            if (anchors_polygons[a_idx] is not None) and (targets_polygons[tg_idx] is not None):
-                intersection = anchors_polygons[a_idx].intersection(targets_polygons[tg_idx]).area
-            else:
-                intersection = 0.
+            intersection = anchors_polygons[a_idx].intersection(targets_polygons[tg_idx]).area
             iou = intersection / (anchors_areas[a_idx] + targets_areas[tg_idx] - intersection + 1e-16)
             ious[a_idx, tg_idx] = iou
 
@@ -105,42 +97,33 @@ def iou_pred_vs_target_boxes(pred_boxes, target_boxes, GIoU=False, DIoU=False, C
 
     t_x, t_y, t_w, t_l, t_im, t_re = target_boxes.t()
     t_yaw = torch.atan2(t_im, t_re)
-    target_conners = get_corners_vectorize(t_x, t_y, t_w, t_l, t_yaw)
-    target_areas = t_w * t_l
+    t_conners = get_corners_vectorize(t_x, t_y, t_w, t_l, t_yaw)
+    t_areas = t_w * t_l
 
-    pred_x, pred_y, pred_w, pred_l, pred_im, pred_re = pred_boxes.t()
-    pred_yaw = torch.atan2(pred_im, pred_re)
-    pred_conners = get_corners_vectorize(pred_x, pred_y, pred_w, pred_l, pred_yaw)
-    pred_areas = pred_w * pred_l
+    p_x, p_y, p_w, p_l, p_im, p_re = pred_boxes.t()
+    p_yaw = torch.atan2(p_im, p_re)
+    p_conners = get_corners_vectorize(p_x, p_y, p_w, p_l, p_yaw)
+    p_areas = p_w * p_l
 
     ious = []
     giou_loss = torch.tensor([0.], device=device, dtype=torch.float)
     # Thinking to apply vectorization this step
     for box_idx in range(n_boxes):
-        pred_cons, t_cons = pred_conners[box_idx], target_conners[box_idx]
-        pred_area, t_area = pred_areas[box_idx], target_areas[box_idx]
-        pred_poly = cvt_box_2_polygon(pred_cons)
-        t_poly = cvt_box_2_polygon(t_cons)
+        p_cons, t_cons = p_conners[box_idx], t_conners[box_idx]
+        p_poly, t_poly = cvt_box_2_polygon(p_cons), cvt_box_2_polygon(t_cons)
+        intersection = p_poly.intersection(t_poly).area
 
-        if (pred_poly is not None) and (t_poly is not None):
-            intersection = pred_poly.intersection(t_poly).area
-        else:
-            intersection = 0.
-        union = pred_area + t_area - intersection
+        p_area, t_area = p_areas[box_idx], t_areas[box_idx]
+        union = p_area + t_area - intersection
         iou = intersection / (union + 1e-16)
 
         if GIoU:
-            try:
-                convex_conners = torch.cat((pred_cons, t_cons), dim=0)
-                hull = ConvexHull(
-                    convex_conners.clone().detach().cpu().numpy())  # done on cpu, just need indices output
-                convex_conners = convex_conners[hull.vertices]
-                convex_polygon = cvt_box_2_polygon(convex_conners)
-                convex_area = convex_polygon.area if convex_polygon is not None else 0.
-                giou_loss += 1. - (iou - (convex_area - union) / (convex_area + 1e-16))
-            except:
-                giou_loss += 2.
-                print('giou_loss - ValueError: Points cannot contain NaN')
+            convex_conners = torch.cat((p_cons, t_cons), dim=0)
+            hull = ConvexHull(convex_conners.clone().detach().cpu().numpy())  # done on cpu, just need indices output
+            convex_conners = convex_conners[hull.vertices]
+            convex_polygon = cvt_box_2_polygon(convex_conners)
+            convex_area = convex_polygon.area
+            giou_loss += 1. - (iou - (convex_area - union) / (convex_area + 1e-16))
         else:
             giou_loss += 1. - iou
 

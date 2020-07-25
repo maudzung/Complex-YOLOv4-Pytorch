@@ -37,12 +37,12 @@ class YoloLayer(nn.Module):
         self.scale_x_y = scale_x_y
         self.ignore_thresh = ignore_thresh
 
-        self.noobj_scale = 1
+        self.noobj_scale = 100
         self.obj_scale = 1
         self.lgiou_scale = 3.54
+        self.leular_scale = 3.54
         self.lobj_scale = 64.3
         self.lcls_scale = 37.4
-        self.leular_scale = 3.54
 
         self.seen = 0
         # Initialize dummy variables
@@ -131,7 +131,8 @@ class YoloLayer(nn.Module):
             # One-hot encoding of label
             tcls[b, best_n, gj, gi, target_labels] = 1
             class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-            ious, giou_loss = iou_pred_vs_target_boxes(pred_boxes[b, best_n, gj, gi], target_boxes, GIoU=True)
+            ious, giou_loss = iou_pred_vs_target_boxes(pred_boxes[b, best_n, gj, gi], target_boxes,
+                                                       GIoU=self.use_giou_loss)
             iou_scores[b, best_n, gj, gi] = ious
             if self.reduction == 'mean':
                 giou_loss /= n_target_boxes
@@ -140,7 +141,7 @@ class YoloLayer(nn.Module):
         return iou_scores, giou_loss, class_mask, obj_mask.type(torch.bool), noobj_mask.type(torch.bool), \
                tx, ty, tw, th, tim, tre, tcls, tconf
 
-    def forward(self, x, targets=None, img_size=608):
+    def forward(self, x, targets=None, img_size=608, use_giou_loss=False):
         """
         :param x: [num_samples or batch, num_anchors * (6 + 1 + num_classes), grid_size, grid_size]
         :param targets: [num boxes, 8] (box_idx, class, x, y, w, l, sin(yaw), cos(yaw))
@@ -148,6 +149,7 @@ class YoloLayer(nn.Module):
         :return:
         """
         self.img_size = img_size
+        self.use_giou_loss = use_giou_loss
         self.device = x.device
         num_samples, _, _, grid_size = x.size()
 
@@ -194,7 +196,10 @@ class YoloLayer(nn.Module):
             iou_scores, giou_loss, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tim, tre, tcls, tconf = self.build_targets(
                 pred_boxes=pred_boxes, pred_cls=pred_cls, target=targets, anchors=self.scaled_anchors)
 
-            iou_score_mean = iou_scores[obj_mask].mean()
+            loss_x = F.mse_loss(pred_x[obj_mask], tx[obj_mask], reduction=self.reduction)
+            loss_y = F.mse_loss(pred_y[obj_mask], ty[obj_mask], reduction=self.reduction)
+            loss_w = F.mse_loss(pred_w[obj_mask], tw[obj_mask], reduction=self.reduction)
+            loss_h = F.mse_loss(pred_h[obj_mask], th[obj_mask], reduction=self.reduction)
             loss_im = F.mse_loss(pred_im[obj_mask], tim[obj_mask], reduction=self.reduction)
             loss_re = F.mse_loss(pred_re[obj_mask], tre[obj_mask], reduction=self.reduction)
             loss_im_re = (1. - torch.sqrt(pred_im[obj_mask] ** 2 + pred_re[obj_mask] ** 2)) ** 2  # as tim^2 + tre^2 = 1
@@ -203,11 +208,16 @@ class YoloLayer(nn.Module):
 
             loss_conf_obj = F.binary_cross_entropy(pred_conf[obj_mask], tconf[obj_mask], reduction=self.reduction)
             loss_conf_noobj = F.binary_cross_entropy(pred_conf[noobj_mask], tconf[noobj_mask], reduction=self.reduction)
-            loss_obj = self.obj_scale * loss_conf_obj + self.noobj_scale * loss_conf_noobj
             loss_cls = F.binary_cross_entropy(pred_cls[obj_mask], tcls[obj_mask], reduction=self.reduction)
-            total_loss = giou_loss * self.lgiou_scale + loss_obj * self.lobj_scale + loss_cls * self.lcls_scale + loss_eular * self.leular_scale
 
-            # Metrics (store loss values using tensorboard)
+            if self.use_giou_loss:
+                loss_obj = loss_conf_obj + loss_conf_noobj
+                total_loss = giou_loss * self.lgiou_scale + loss_eular * self.leular_scale + loss_obj * self.lobj_scale + loss_cls * self.lcls_scale
+            else:
+                loss_obj = self.obj_scale * loss_conf_obj + self.noobj_scale * loss_conf_noobj
+                total_loss = loss_x + loss_y + loss_w + loss_h + loss_eular + loss_obj + loss_cls
+
+                # Metrics (store loss values using tensorboard)
             cls_acc = 100 * class_mask[obj_mask].mean()
             conf_obj = pred_conf[obj_mask].mean()
             conf_noobj = pred_conf[noobj_mask].mean()
@@ -221,8 +231,12 @@ class YoloLayer(nn.Module):
 
             self.metrics = {
                 "loss": to_cpu(total_loss).item(),
-                "iou_score": to_cpu(iou_score_mean).item(),
+                "iou_score": to_cpu(iou_scores[obj_mask].mean()).item(),
                 'giou_loss': to_cpu(giou_loss).item(),
+                'loss_x': to_cpu(loss_x).item(),
+                'loss_y': to_cpu(loss_y).item(),
+                'loss_w': to_cpu(loss_w).item(),
+                'loss_h': to_cpu(loss_h).item(),
                 'loss_eular': to_cpu(loss_eular).item(),
                 'loss_im': to_cpu(loss_im).item(),
                 'loss_re': to_cpu(loss_re).item(),

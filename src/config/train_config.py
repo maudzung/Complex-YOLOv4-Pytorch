@@ -33,6 +33,8 @@ def parse_train_configs():
                         help='The path for cfgfile (only for darknet)')
     parser.add_argument('--pretrained_path', type=str, default=None, metavar='PATH',
                         help='the path of the pretrained checkpoint')
+    parser.add_argument('--use_giou_loss', action='store_true',
+                        help='If true, use GIoU loss during training. If false, use MSE loss for training')
 
     ####################################################################
     ##############     Dataloader and Running configs            #######

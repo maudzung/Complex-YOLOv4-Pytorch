@@ -144,14 +144,15 @@ class EmptyModule(nn.Module):
 
 # support route shortcut and reorg
 class Darknet(nn.Module):
-    def __init__(self, cfgfile):
+    def __init__(self, cfgfile, use_giou_loss):
         super(Darknet, self).__init__()
+        self.use_giou_loss = use_giou_loss
         self.blocks = parse_cfg(cfgfile)
         self.width = int(self.blocks[0]['width'])
         self.height = int(self.blocks[0]['height'])
 
         self.models = self.create_network(self.blocks)  # merge conv, bn,leaky
-        self.yolo_layers = [layer for layer in self.models if hasattr(layer, "metrics")]
+        self.yolo_layers = [layer for layer in self.models if layer.__class__.__name__ == 'YoloLayer']
 
         self.loss = self.models[len(self.models) - 1]
 
@@ -217,7 +218,7 @@ class Darknet(nn.Module):
                     x = F.relu(x, inplace=True)
                 outputs[ind] = x
             elif block['type'] == 'yolo':
-                x, layer_loss = self.models[ind](x, targets, img_size)
+                x, layer_loss = self.models[ind](x, targets, img_size, self.use_giou_loss)
                 loss += layer_loss
                 yolo_outputs.append(x)
             elif block['type'] == 'cost':
@@ -448,4 +449,3 @@ class Darknet(nn.Module):
                 pass
             else:
                 print('unknown type %s' % (block['type']))
-
