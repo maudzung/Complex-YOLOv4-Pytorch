@@ -70,20 +70,15 @@ def invert_target(targets, calib, img_shape_2d, RGB_Map=None):
 
 
 def predictions_to_kitti_format(img_detections, calib, img_shape_2d, img_size, RGB_Map=None):
-    predictions = np.zeros([50, 7], dtype=np.float32)
-    count = 0
+    predictions = []
     for detections in img_detections:
         if detections is None:
             continue
         # Rescale boxes to original image
-        for x, y, w, l, im, re, cls_conf, cls_pred in detections:
-            if count >= 50:  # Max 50 objects
-                break
-            # yaw = np.arctan2(im, re)
-            predictions[count, :] = cls_pred, x / img_size, y / img_size, w / img_size, l / img_size, im, re
-            count += 1
+        for x, y, w, l, im, re, *_, cls_pred in detections:
+            predictions.append([cls_pred, x / img_size, y / img_size, w / img_size, l / img_size, im, re])
 
-    predictions = kitti_bev_utils.inverse_yolo_target(predictions, cnf.boundary)
+    predictions = kitti_bev_utils.inverse_yolo_target(np.array(predictions), cnf.boundary)
     if predictions.shape[0]:
         predictions[:, 1:] = transformation.lidar_to_camera_box(predictions[:, 1:], calib.V2C, calib.R0, calib.P)
 

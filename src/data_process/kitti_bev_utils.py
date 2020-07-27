@@ -139,17 +139,8 @@ def build_yolo_target(labels):
 
 
 def inverse_yolo_target(targets, bc):
-    ntargets = 0
-    for i, t in enumerate(targets):
-        if t.sum(0): ntargets += 1
-
-    labels = np.zeros([ntargets, 8], dtype=np.float32)
-
-    n = 0
+    labels = []
     for t in targets:
-        if t.sum(0) == 0:
-            continue
-
         c, y, x, w, l, im, re = t
         z, h = -1.55, 1.5
         if c == 1:
@@ -161,14 +152,11 @@ def inverse_yolo_target(targets, bc):
         x = x * (bc["maxX"] - bc["minX"]) + bc["minX"]
         w = w * (bc["maxY"] - bc["minY"])
         l = l * (bc["maxX"] - bc["minX"])
-
         w -= 0.3
         l -= 0.3
+        labels.append([c, x, y, z, h, w, l, - np.arctan2(im, re) - 2 * np.pi])
 
-        labels[n, :] = c, x, y, z, h, w, l, - np.arctan2(im, re) - 2 * np.pi
-        n += 1
-
-    return labels
+    return np.array(labels)
 
 
 # send parameters in bev image coordinates format

@@ -25,7 +25,7 @@ from data_process import kitti_data_utils, kitti_bev_utils
 from data_process.kitti_dataloader import create_test_dataloader
 from models.model_utils import create_model
 from utils.misc import make_folder
-from utils.evaluation_utils import post_processing, rescale_boxes
+from utils.evaluation_utils import post_processing, rescale_boxes, post_processing_v2
 from utils.misc import time_synchronized
 from utils.prediction_utils import predictions_to_kitti_format
 from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev
@@ -112,7 +112,7 @@ if __name__ == '__main__':
             t1 = time_synchronized()
             outputs = model(input_imgs)
             t2 = time_synchronized()
-            detections = post_processing(outputs, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
+            detections = post_processing_v2(outputs, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
 
             img_detections = []  # Stores detections for each image index
             img_detections.extend(detections)
@@ -125,7 +125,7 @@ if __name__ == '__main__':
                     continue
                 # Rescale boxes to original image
                 detections = rescale_boxes(detections, configs.img_size, img_bev.shape[:2])
-                for x, y, w, l, im, re, cls_conf, cls_pred in detections:
+                for x, y, w, l, im, re, *_, cls_pred in detections:
                     yaw = np.arctan2(im, re)
                     # Draw rotated box
                     kitti_bev_utils.drawRotatedBox(img_bev, x, y, w, l, yaw, cnf.colors[int(cls_pred)])

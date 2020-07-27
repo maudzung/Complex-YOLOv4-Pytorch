@@ -17,7 +17,7 @@ sys.path.append('./')
 from data_process.kitti_dataloader import create_val_dataloader
 from models.model_utils import create_model
 from utils.misc import AverageMeter, ProgressMeter
-from utils.evaluation_utils import post_processing, get_batch_statistics_rotated_bbox, ap_per_class, load_classes
+from utils.evaluation_utils import post_processing, get_batch_statistics_rotated_bbox, ap_per_class, load_classes, post_processing_v2
 
 
 def evaluate_mAP(val_loader, model, configs, logger):
@@ -42,7 +42,7 @@ def evaluate_mAP(val_loader, model, configs, logger):
             imgs = imgs.to(configs.device, non_blocking=True)
 
             outputs = model(imgs)
-            outputs = post_processing(outputs, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
+            outputs = post_processing_v2(outputs, conf_thresh=configs.conf_thresh, nms_thresh=configs.nms_thresh)
 
             sample_metrics += get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold=configs.iou_thresh)
 
@@ -116,10 +116,9 @@ if __name__ == '__main__':
     class_names = load_classes(configs.classnames_infor_path)
 
     model = create_model(configs)
-    model.print_network()
+    # model.print_network()
     print('\n\n' + '-*=' * 30 + '\n\n')
     assert os.path.isfile(configs.pretrained_path), "No file at {}".format(configs.pretrained_path)
-    # model.load_weights(configs.pretrained_path)
     model.load_state_dict(torch.load(configs.pretrained_path))
 
     configs.device = torch.device('cpu' if configs.no_cuda else 'cuda:{}'.format(configs.gpu_idx))

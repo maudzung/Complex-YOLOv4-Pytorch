@@ -181,8 +181,8 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
                     continue
 
                 # iou, box_index = rotated_bbox_iou(pred_box.unsqueeze(0), target_boxes, 1.0, False).squeeze().max(0)
-                ious = iou_rotated_pred_vs_targets_cpu(pred_box, target_boxes)
-                iou, box_index = torch.from_numpy(ious).max(0)
+                ious = iou_rotated_single_vs_multi_boxes_cpu(pred_box, target_boxes)
+                iou, box_index = ious.max(dim=0)
 
                 if iou >= iou_threshold and box_index not in detected_boxes:
                     true_positives[pred_i] = 1
@@ -191,33 +191,32 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
     return batch_metrics
 
 
-def iou_rotated_pred_vs_targets_cpu(pred_box, target_boxes):
+def iou_rotated_single_vs_multi_boxes_cpu(single_box, multi_boxes):
     """
     :param pred_box: Numpy array
     :param target_boxes: Numpy array
     :return:
     """
 
-    p_x, p_y, p_w, p_l, p_im, p_re = pred_box
-    p_area = p_w * p_l
-    p_yaw = np.arctan2(p_im, p_re)
-    p_conners = bev_utils.get_corners(p_x, p_y, p_w, p_l, p_yaw)
-    p_polygon = cvt_box_2_polygon(p_conners)
+    s_x, s_y, s_w, s_l, s_im, s_re = single_box
+    s_area = s_w * s_l
+    s_yaw = np.arctan2(s_im, s_re)
+    s_conners = bev_utils.get_corners(s_x, s_y, s_w, s_l, s_yaw)
+    s_polygon = cvt_box_2_polygon(s_conners)
 
-    num_targets_boxes = target_boxes.shape[0]
-    t_x, t_y, t_w, t_l, t_im, t_re = target_boxes.transpose(1, 0)
-    targets_areas = t_w * t_l
-    t_yaw = np.arctan2(t_im, t_re)
-    targets_conners = get_corners_vectorize(t_x, t_y, t_w, t_l, t_yaw)
-    targets_polygons = [cvt_box_2_polygon(box_) for box_ in targets_conners]
+    m_x, m_y, m_w, m_l, m_im, m_re = multi_boxes.transpose(1, 0)
+    targets_areas = m_w * m_l
+    m_yaw = np.arctan2(m_im, m_re)
+    m_boxes_conners = get_corners_vectorize(m_x, m_y, m_w, m_l, m_yaw)
+    m_boxes_polygons = [cvt_box_2_polygon(box_) for box_ in m_boxes_conners]
 
     ious = []
-    for t_idx in range(num_targets_boxes):
-        intersection = p_polygon.intersection(targets_polygons[t_idx]).area
-        iou_ = intersection / (p_area + targets_areas[t_idx] - intersection + 1e-16)
+    for m_idx in range(multi_boxes.shape[0]):
+        intersection = s_polygon.intersection(m_boxes_polygons[m_idx]).area
+        iou_ = intersection / (s_area + targets_areas[m_idx] - intersection + 1e-16)
         ious.append(iou_)
 
-    return np.array(ious, dtype=np.float32)
+    return torch.tensor(ious, dtype=torch.float)
 
 
 def get_corners_vectorize(x, y, w, l, yaw):
@@ -309,22 +308,15 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
 
         keep = nms_cpu(l_box_array, l_max_conf, nms_thresh=nms_thresh)
 
-        bboxes = []
         if (keep.size > 0):
             l_box_array = l_box_array[keep, :]
-            l_max_conf = l_max_conf[keep]
-            l_max_id = l_max_id[keep]
-
-            for j in range(l_box_array.shape[0]):
-                x_, y_, w_, l_, im_, re_ = l_box_array[j]
-                bboxes.append([x_, y_, w_, l_, im_, re_, l_max_conf[j], l_max_id[j]])
-        if len(bboxes) > 0:
-            bboxes_batch[i] = np.array(bboxes)
-
+            l_max_conf = l_max_conf[keep].reshape(-1, 1)
+            l_max_id = l_max_id[keep].reshape(-1, 1)
+            bboxes_batch[i] = np.concatenate((l_box_array, l_max_conf, l_max_id), axis=-1)
     return bboxes_batch
 
 
-def post_processing_v2(prediction, conf_thres=0.95, nms_thres=0.4):
+def post_processing_v2(prediction, conf_thresh=0.95, nms_thresh=0.4):
     """
         Removes detections with lower object confidence score than 'conf_thres' and performs
         Non-Maximum Suppression to further filter detections.
@@ -334,23 +326,21 @@ def post_processing_v2(prediction, conf_thres=0.95, nms_thres=0.4):
     output = [None for _ in range(len(prediction))]
     for image_i, image_pred in enumerate(prediction):
         # Filter out confidence scores below threshold
-        image_pred = image_pred[image_pred[:, 6] >= conf_thres]
+        image_pred = image_pred[image_pred[:, 6] >= conf_thresh]
         # If none are remaining => process next image
         if not image_pred.size(0):
             continue
         # Object confidence times class confidence
-        score = image_pred[:, 6] * image_pred[:, 7:].max(1)[0]
+        score = image_pred[:, 6] * image_pred[:, 7:].max(dim=1)[0]
         # Sort by it
         image_pred = image_pred[(-score).argsort()]
-        class_confs, class_preds = image_pred[:, 7:].max(1, keepdim=True)
-        detections = torch.cat((image_pred[:, :7].float(), class_confs.float(), class_preds.float()), 1)
+        class_confs, class_preds = image_pred[:, 7:].max(dim=1, keepdim=True)
+        detections = torch.cat((image_pred[:, :7].float(), class_confs.float(), class_preds.float()), dim=1)
         # Perform non-maximum suppression
         keep_boxes = []
         while detections.size(0):
             # large_overlap = rotated_bbox_iou(detections[0, :6].unsqueeze(0), detections[:, :6], 1.0, False) > nms_thres # not working
-            large_overlap = rotated_bbox_iou_polygon(detections[0, :6], detections[:, :6]) > nms_thres
-            # large_overlap = torch.from_numpy(large_overlap.astype('uint8'))
-            large_overlap = torch.from_numpy(large_overlap)
+            large_overlap = iou_rotated_single_vs_multi_boxes_cpu(detections[0, :6], detections[:, :6]) > nms_thresh
             label_match = detections[0, -1] == detections[:, -1]
             # Indices of boxes with lower confidence scores, large IOUs and matching labels
             invalid = large_overlap & label_match
@@ -359,7 +349,7 @@ def post_processing_v2(prediction, conf_thres=0.95, nms_thres=0.4):
             detections[0, :6] = (weights * detections[invalid, :6]).sum(0) / weights.sum()
             keep_boxes += [detections[0]]
             detections = detections[~invalid]
-        if keep_boxes:
+        if len(keep_boxes) > 0:
             output[image_i] = torch.stack(keep_boxes)
 
     return output
