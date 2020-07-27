@@ -74,6 +74,8 @@ def parse_eval_configs():
                         help='The path for cfgfile (only for darknet)')
     parser.add_argument('--pretrained_path', type=str, default=None, metavar='PATH',
                         help='the path of the pretrained checkpoint')
+    parser.add_argument('--use_giou_loss', action='store_true',
+                        help='If true, use GIoU loss during training. If false, use MSE loss for training')
 
     parser.add_argument('--no_cuda', action='store_true',
                         help='If true, cuda is not used.')

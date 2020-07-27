@@ -132,6 +132,7 @@ def main_worker(gpu_idx, configs):
         precision, recall, AP, f1, ap_class = evaluate_mAP(val_dataloader, model, configs, None)
         print('Evaluate - precision: {}, recall: {}, AP: {}, f1: {}, ap_class: {}'.format(precision, recall, AP, f1,
                                                                                           ap_class))
+        print('mAP {}'.format(AP.mean()))
         return
 
     for epoch in range(configs.start_epoch, configs.num_epochs + 1):
@@ -147,8 +148,15 @@ def main_worker(gpu_idx, configs):
         train_one_epoch(train_dataloader, model, optimizer, lr_scheduler, epoch, configs, logger, tb_writer)
         if not configs.no_val:
             val_dataloader = create_val_dataloader(configs)
+            print('number of batches in val_dataloader: {}'.format(len(val_dataloader)))
             precision, recall, AP, f1, ap_class = evaluate_mAP(val_dataloader, model, configs, logger)
-            val_metrics_dict = {'precision': precision, 'recall': recall, 'AP': AP, 'f1': f1, 'ap_class': ap_class}
+            val_metrics_dict = {
+                'precision': precision.mean(),
+                'recall': recall.mean(),
+                'AP': AP.mean(),
+                'f1': f1.mean(),
+                'ap_class': ap_class.mean()
+            }
             if tb_writer is not None:
                 tb_writer.add_scalars('Validation', val_metrics_dict, epoch)
 

@@ -11,29 +11,14 @@ sys.path.append('../')
 import data_process.kitti_bev_utils as bev_utils
 
 
-def cvt_box_2_polygon(boxes_array):
+def cvt_box_2_polygon(box):
     """
-    :param array: an array of shape [# bboxs, 4, 2]
+    :param box: an array of shape [4, 2]
     :return: a shapely.geometry.Polygon object
     """
     # use .buffer(0) to fix a line polygon
     # more infor: https://stackoverflow.com/questions/13062334/polygon-intersection-error-in-shapely-shapely-geos-topologicalerror-the-opera
-    polygons = [Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]).buffer(0) for box in boxes_array]
-
-    return np.array(polygons)
-
-
-def compute_iou_polygons(polygon_1, polygons):
-    """Calculates IoU of the given box with the array of the given boxes.
-    box: a polygon
-    boxes: a vector of polygons
-    Note: the areas are passed in rather than calculated here for
-    efficiency. Calculate once in the caller to avoid duplicate work.
-    """
-    # Calculate intersection areas
-    iou = [polygon_1.intersection(poly_).area / (polygon_1.union(poly_).area + 1e-12) for poly_ in polygons]
-
-    return np.array(iou, dtype=np.float32)
+    return Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]).buffer(0)
 
 
 def compute_iou_nms(idx_self, idx_other, polygons, areas):
@@ -62,15 +47,6 @@ def load_classes(path):
     fp = open(path, "r")
     names = fp.read().split("\n")[:-1]
     return names
-
-
-def weights_init_normal(m):
-    classname = m.__class__.__name__
-    if classname.find("Conv") != -1:
-        torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find("BatchNorm2d") != -1:
-        torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
-        torch.nn.init.constant_(m.bias.data, 0.0)
 
 
 def rescale_boxes(boxes, current_dim, original_shape):
@@ -149,7 +125,6 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
 def compute_ap(recall, precision):
     """ Compute the average precision, given the recall and precision curves.
     Code originally from https://github.com/rbgirshick/py-faster-rcnn.
-
     # Arguments
         recall:    The recall curve (list).
         precision: The precision curve (list).
@@ -206,7 +181,7 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
                     continue
 
                 # iou, box_index = rotated_bbox_iou(pred_box.unsqueeze(0), target_boxes, 1.0, False).squeeze().max(0)
-                ious = rotated_bbox_iou_polygon_cpu(pred_box, target_boxes)
+                ious = iou_rotated_pred_vs_targets_cpu(pred_box, target_boxes)
                 iou, box_index = torch.from_numpy(ious).max(0)
 
                 if iou >= iou_threshold and box_index not in detected_boxes:
@@ -216,48 +191,66 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
     return batch_metrics
 
 
-def rotated_bbox_iou_polygon_cpu(box1, box2):
+def iou_rotated_pred_vs_targets_cpu(pred_box, target_boxes):
     """
-    :param box1: Numpy array
-    :param box2: Numpy array
+    :param pred_box: Numpy array
+    :param target_boxes: Numpy array
     :return:
     """
 
-    x, y, w, l, im, re = box1
-    angle = np.arctan2(im, re)
-    bbox1 = np.array(bev_utils.get_corners(x, y, w, l, angle)).reshape(-1, 4, 2)
-    bbox1 = cvt_box_2_polygon(bbox1)
+    p_x, p_y, p_w, p_l, p_im, p_re = pred_box
+    p_area = p_w * p_l
+    p_yaw = np.arctan2(p_im, p_re)
+    p_conners = bev_utils.get_corners(p_x, p_y, p_w, p_l, p_yaw)
+    p_polygon = cvt_box_2_polygon(p_conners)
 
-    bbox2 = []
-    for i in range(box2.shape[0]):
-        x, y, w, l, im, re = box2[i, :]
-        angle = np.arctan2(im, re)
-        bev_corners = bev_utils.get_corners(x, y, w, l, angle)
-        bbox2.append(bev_corners)
-    bbox2 = cvt_box_2_polygon(np.array(bbox2))
+    num_targets_boxes = target_boxes.shape[0]
+    t_x, t_y, t_w, t_l, t_im, t_re = target_boxes.transpose(1, 0)
+    targets_areas = t_w * t_l
+    t_yaw = np.arctan2(t_im, t_re)
+    targets_conners = get_corners_vectorize(t_x, t_y, t_w, t_l, t_yaw)
+    targets_polygons = [cvt_box_2_polygon(box_) for box_ in targets_conners]
 
-    return compute_iou_polygons(bbox1[0], bbox2)
+    ious = []
+    for t_idx in range(num_targets_boxes):
+        intersection = p_polygon.intersection(targets_polygons[t_idx]).area
+        iou_ = intersection / (p_area + targets_areas[t_idx] - intersection + 1e-16)
+        ious.append(iou_)
+
+    return np.array(ious, dtype=np.float32)
 
 
-def compute_polygons(boxes):
+def get_corners_vectorize(x, y, w, l, yaw):
+    """bev image coordinates format - vectorization
+
+    :param x, y, w, l, yaw: [num_boxes,]
+    :return: num_boxes x (x,y) of 4 conners
     """
+    bbox2 = np.zeros((x.shape[0], 4, 2), dtype=np.float32)
+    cos_yaw = np.cos(yaw)
+    sin_yaw = np.sin(yaw)
 
-    :param boxes: [num, 6]
-    :return:
-    """
-    polygons = []
-    for (x, y, w, l, im, re) in boxes:
-        angle = np.arctan2(im, re)
-        bev_corners = bev_utils.get_corners(x, y, w, l, angle)
-        polygons.append(bev_corners)
-    polygons = cvt_box_2_polygon(np.array(polygons))
+    # front left
+    bbox2[:, 0, 0] = x - w / 2 * cos_yaw - l / 2 * sin_yaw
+    bbox2[:, 0, 1] = y - w / 2 * sin_yaw + l / 2 * cos_yaw
 
-    return polygons
+    # rear left
+    bbox2[:, 1, 0] = x - w / 2 * cos_yaw + l / 2 * sin_yaw
+    bbox2[:, 1, 1] = y - w / 2 * sin_yaw - l / 2 * cos_yaw
+
+    # rear right
+    bbox2[:, 2, 0] = x + w / 2 * cos_yaw + l / 2 * sin_yaw
+    bbox2[:, 2, 1] = y + w / 2 * sin_yaw - l / 2 * cos_yaw
+
+    # front right
+    bbox2[:, 3, 0] = x + w / 2 * cos_yaw - l / 2 * sin_yaw
+    bbox2[:, 3, 1] = y + w / 2 * sin_yaw + l / 2 * cos_yaw
+
+    return bbox2
 
 
 def nms_cpu(boxes, confs, nms_thresh=0.5):
     """
-
     :param boxes: [num, 6]
     :param confs: [num, num_classes]
     :param nms_thresh:
@@ -267,16 +260,18 @@ def nms_cpu(boxes, confs, nms_thresh=0.5):
     # order of reduce confidence (high --> low)
     order = confs.argsort()[::-1]
 
-    polygons = compute_polygons(boxes)  # 4 vertices of the box
-
-    areas = [polygon.area for polygon in polygons]
+    x, y, w, l, im, re = boxes.transpose(1, 0)
+    yaw = np.arctan2(im, re)
+    boxes_conners = get_corners_vectorize(x, y, w, l, yaw)
+    boxes_polygons = [cvt_box_2_polygon(box_) for box_ in boxes_conners]  # 4 vertices of the box
+    boxes_areas = w * l
 
     keep = []
     while order.size > 0:
         idx_self = order[0]
         idx_other = order[1:]
         keep.append(idx_self)
-        over = compute_iou_nms(idx_self, idx_other, polygons, areas)
+        over = compute_iou_nms(idx_self, idx_other, boxes_polygons, boxes_areas)
         inds = np.where(over <= nms_thresh)[0]
         order = order[inds + 1]
 
@@ -321,18 +316,50 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
             l_max_id = l_max_id[keep]
 
             for j in range(l_box_array.shape[0]):
-                bboxes.append(
-                    [l_box_array[j, 0], l_box_array[j, 1], l_box_array[j, 2], l_box_array[j, 3], l_box_array[j, 4],
-                     l_box_array[j, 5], l_max_conf[j], l_max_id[j]])
+                x_, y_, w_, l_, im_, re_ = l_box_array[j]
+                bboxes.append([x_, y_, w_, l_, im_, re_, l_max_conf[j], l_max_id[j]])
         if len(bboxes) > 0:
             bboxes_batch[i] = np.array(bboxes)
 
     return bboxes_batch
 
 
-if __name__ == '__main__':
-    import time
+def post_processing_v2(prediction, conf_thres=0.95, nms_thres=0.4):
+    """
+        Removes detections with lower object confidence score than 'conf_thres' and performs
+        Non-Maximum Suppression to further filter detections.
+        Returns detections with shape:
+            (x, y, w, l, im, re, object_conf, class_score, class_pred)
+    """
+    output = [None for _ in range(len(prediction))]
+    for image_i, image_pred in enumerate(prediction):
+        # Filter out confidence scores below threshold
+        image_pred = image_pred[image_pred[:, 6] >= conf_thres]
+        # If none are remaining => process next image
+        if not image_pred.size(0):
+            continue
+        # Object confidence times class confidence
+        score = image_pred[:, 6] * image_pred[:, 7:].max(1)[0]
+        # Sort by it
+        image_pred = image_pred[(-score).argsort()]
+        class_confs, class_preds = image_pred[:, 7:].max(1, keepdim=True)
+        detections = torch.cat((image_pred[:, :7].float(), class_confs.float(), class_preds.float()), 1)
+        # Perform non-maximum suppression
+        keep_boxes = []
+        while detections.size(0):
+            # large_overlap = rotated_bbox_iou(detections[0, :6].unsqueeze(0), detections[:, :6], 1.0, False) > nms_thres # not working
+            large_overlap = rotated_bbox_iou_polygon(detections[0, :6], detections[:, :6]) > nms_thres
+            # large_overlap = torch.from_numpy(large_overlap.astype('uint8'))
+            large_overlap = torch.from_numpy(large_overlap)
+            label_match = detections[0, -1] == detections[:, -1]
+            # Indices of boxes with lower confidence scores, large IOUs and matching labels
+            invalid = large_overlap & label_match
+            weights = detections[invalid, 6:7]
+            # Merge overlapping bboxes by order of confidence
+            detections[0, :6] = (weights * detections[invalid, :6]).sum(0) / weights.sum()
+            keep_boxes += [detections[0]]
+            detections = detections[~invalid]
+        if keep_boxes:
+            output[image_i] = torch.stack(keep_boxes)
 
-    prediction = torch.randn((4, 22743, 10))
-    print('prediction size: {}'.format(prediction.size()))
-    output = post_processing(prediction, conf_thresh=0.99999, nms_thresh=0.9999)
+    return output
