@@ -119,9 +119,7 @@ def iou_pred_vs_target_boxes(pred_boxes, target_boxes, GIoU=False, DIoU=False, C
             p_poly, t_poly = cvt_box_2_polygon(p_cons), cvt_box_2_polygon(t_cons)
             intersection = p_poly.intersection(t_poly).area
         else:
-            r1 = [p_x[box_idx], p_y[box_idx], p_w[box_idx], p_l[box_idx], p_yaw[box_idx]]
-            r2 = [t_x[box_idx], t_y[box_idx], t_w[box_idx], t_l[box_idx], t_yaw[box_idx]]
-            intersection = intersection_area(r1, r2)
+            intersection = intersection_area(p_cons, t_cons)
 
         p_area, t_area = p_areas[box_idx], t_areas[box_idx]
         union = p_area + t_area - intersection
@@ -179,7 +177,7 @@ if __name__ == "__main__":
     img = np.zeros((img_size, img_size, 3))
     img = cv2.resize(img, (img_size, img_size))
 
-    box1 = torch.tensor([100, 100, 60, 10, 0], dtype=torch.float).cuda()
+    box1 = torch.tensor([100, 100, 60, 10, 0.5], dtype=torch.float).cuda()
     box2 = torch.tensor([100, 100, 40, 20, 0], dtype=torch.float).cuda()
 
     box1_conners = get_corners_torch(box1[0], box1[1], box1[2], box1[3], box1[4])
@@ -205,7 +203,7 @@ if __name__ == "__main__":
         'box1_area: {:.2f}, box2_area: {:.2f}, intersection: {:.2f}, iou: {:.4f}, convex_area: {:.4f}, giou_loss: {}'.format(
             box1_area, box2_area, intersection, iou, convex_area, giou_loss))
 
-    print('intersection_area: {}'.format(intersection_area(box1, box2)))
+    print('intersection_area: {}'.format(intersection_area(box1_conners, box2_conners)))
     print('convex_area using PolyArea2D: {}'.format(PolyArea2D(convex_conners)))
 
     img = cv2.polylines(img, [box1_conners.cpu().numpy().astype(np.int)], True, (255, 0, 0), 2)

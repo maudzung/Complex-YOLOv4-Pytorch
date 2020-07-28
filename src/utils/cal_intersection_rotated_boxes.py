@@ -10,81 +10,52 @@
 Refer from # https://stackoverflow.com/questions/44797713/calculate-the-area-of-intersection-of-two-rotated-rectangles-in-python?noredirect=1&lq=1
 """
 
-from math import pi
-
 import torch
-
-
-class Vector:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-    def __add__(self, v):
-        if not isinstance(v, Vector):
-            return NotImplemented
-        return Vector(self.x + v.x, self.y + v.y)
-
-    def __sub__(self, v):
-        if not isinstance(v, Vector):
-            return NotImplemented
-        return Vector(self.x - v.x, self.y - v.y)
-
-    def cross(self, v):
-        if not isinstance(v, Vector):
-            return NotImplemented
-        return self.x * v.y - self.y * v.x
 
 
 class Line:
     # ax + by + c = 0
-    def __init__(self, v1, v2):
-        self.a = v2.y - v1.y
-        self.b = v1.x - v2.x
-        self.c = v2.cross(v1)
+    def __init__(self, p1, p2):
+        """
 
-    def __call__(self, p):
-        return self.a * p.x + self.b * p.y + self.c
+        Args:
+            p1: (x, y)
+            p2: (x, y)
+        """
+        self.a = p2[1] - p1[1]
+        self.b = p1[0] - p2[0]
+        self.c = p2[0] * p1[1] - p2[1] * p1[0]  # cross
+        self.device = p1.device
 
-    def intersection(self, other):
+    def cal_values(self, pts):
+        return self.a * pts[:, 0] + self.b * pts[:, 1] + self.c
+
+    def find_intersection(self, other):
         # See e.g.     https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection#Using_homogeneous_coordinates
         if not isinstance(other, Line):
             return NotImplemented
         w = self.a * other.b - self.b * other.a
-        return Vector(
-            (self.b * other.c - self.c * other.b) / w,
-            (self.c * other.a - self.a * other.c) / w
-        )
+        return torch.tensor([(self.b * other.c - self.c * other.b) / w, (self.c * other.a - self.a * other.c) / w],
+                            device=self.device)
 
 
-def rectangle_vertices(cx, cy, w, h, yaw):
-    dx = w / 2
-    dy = h / 2
-    dxcos = dx * torch.cos(yaw)
-    dxsin = dx * torch.sin(yaw)
-    dycos = dy * torch.cos(yaw)
-    dysin = dy * torch.sin(yaw)
-    return (
-        Vector(cx, cy) + Vector(-dxcos - -dysin, -dxsin + -dycos),
-        Vector(cx, cy) + Vector(dxcos - -dysin, dxsin + -dycos),
-        Vector(cx, cy) + Vector(dxcos - dysin, dxsin + dycos),
-        Vector(cx, cy) + Vector(-dxcos - dysin, -dxsin + dycos)
-    )
+def intersection_area(rect1, rect2):
+    """Calculate the inter
 
+    Args:
+        rect1: vertices of the rectangles (4, 2)
+        rect2: vertices of the rectangles (4, 2)
 
-def intersection_area(r1, r2):
-    # r1 and r2 are in (center, width, height, rotation) representation
-    # First convert these into a sequence of vertices
+    Returns:
 
-    rect1 = rectangle_vertices(*r1)
-    rect2 = rectangle_vertices(*r2)
+    """
 
-    # Use the vertices of the first rectangle as
-    # starting vertices of the intersection polygon.
+    # Use the vertices of the first rectangle as, starting vertices of the intersection polygon.
     intersection = rect1
 
     # Loop over the edges of the second rectangle
-    for p, q in zip(rect2, rect2[1:] + rect2[:1]):
+    roll_rect2 = torch.roll(rect2, -1, dims=0)
+    for p, q in zip(rect2, roll_rect2):
         if len(intersection) <= 2:
             break  # No intersection
 
@@ -92,30 +63,31 @@ def intersection_area(r1, r2):
 
         # Any point p with line(p) <= 0 is on the "inside" (or on the boundary),
         # any point p with line(p) > 0 is on the "outside".
-
         # Loop over the edges of the intersection polygon,
         # and determine which part is inside and which is outside.
         new_intersection = []
-        line_values = [line(t) for t in intersection]
-        for s, t, s_value, t_value in zip(
-                intersection, intersection[1:] + intersection[:1],
-                line_values, line_values[1:] + line_values[:1]):
+        line_values = line.cal_values(intersection)
+        roll_intersection = torch.roll(intersection, -1, dims=0)
+        roll_line_values = torch.roll(line_values, -1, dims=0)
+        for s, t, s_value, t_value in zip(intersection, roll_intersection, line_values, roll_line_values):
             if s_value <= 0:
                 new_intersection.append(s)
             if s_value * t_value < 0:
                 # Points are on opposite sides.
                 # Add the intersection of the lines to new_intersection.
-                intersection_point = line.intersection(Line(s, t))
+                intersection_point = line.find_intersection(Line(s, t))
                 new_intersection.append(intersection_point)
 
-        intersection = new_intersection
+        if len(new_intersection) > 0:
+            intersection = torch.stack(new_intersection)
+        else:
+            break
 
     # Calculate area
     if len(intersection) <= 2:
-        return 0
+        return 0.
 
-    return 0.5 * sum(p.x * q.y - p.y * q.x for p, q in
-                     zip(intersection, intersection[1:] + intersection[:1]))
+    return PolyArea2D(intersection)
 
 
 def PolyArea2D(pts):
@@ -124,7 +96,76 @@ def PolyArea2D(pts):
     return area
 
 
-if __name__ == '__main__':
-    box1 = torch.tensor([100, 100, 40, 20, pi / 3], dtype=torch.float).cuda()
+if __name__ == "__main__":
+    import cv2
+    import numpy as np
+    from shapely.geometry import Polygon
+
+
+    def cvt_box_2_polygon(box):
+        """
+        :param array: an array of shape [num_conners, 2]
+        :return: a shapely.geometry.Polygon object
+        """
+        # use .buffer(0) to fix a line polygon
+        # more infor: https://stackoverflow.com/questions/13062334/polygon-intersection-error-in-shapely-shapely-geos-topologicalerror-the-opera
+        return Polygon([(box[i, 0], box[i, 1]) for i in range(len(box))]).buffer(0)
+
+
+    def get_corners_torch(x, y, w, l, yaw):
+        device = x.device
+        bev_corners = torch.zeros((4, 2), dtype=torch.float, device=device)
+        cos_yaw = torch.cos(yaw)
+        sin_yaw = torch.sin(yaw)
+        # front left
+        bev_corners[0, 0] = x - w / 2 * cos_yaw - l / 2 * sin_yaw
+        bev_corners[0, 1] = y - w / 2 * sin_yaw + l / 2 * cos_yaw
+
+        # rear left
+        bev_corners[1, 0] = x - w / 2 * cos_yaw + l / 2 * sin_yaw
+        bev_corners[1, 1] = y - w / 2 * sin_yaw - l / 2 * cos_yaw
+
+        # rear right
+        bev_corners[2, 0] = x + w / 2 * cos_yaw + l / 2 * sin_yaw
+        bev_corners[2, 1] = y + w / 2 * sin_yaw - l / 2 * cos_yaw
+
+        # front right
+        bev_corners[3, 0] = x + w / 2 * cos_yaw - l / 2 * sin_yaw
+        bev_corners[3, 1] = y + w / 2 * sin_yaw + l / 2 * cos_yaw
+
+        return bev_corners
+
+
+    # Show convex in an image
+
+    img_size = 300
+    img = np.zeros((img_size, img_size, 3))
+    img = cv2.resize(img, (img_size, img_size))
+
+    box1 = torch.tensor([100, 100, 40, 10, np.pi / 2], dtype=torch.float).cuda()
     box2 = torch.tensor([100, 100, 40, 20, 0], dtype=torch.float).cuda()
-    print('intersection_area: {}'.format(intersection_area(box1, box2)))
+
+    box1_conners = get_corners_torch(box1[0], box1[1], box1[2], box1[3], box1[4])
+    box1_polygon = cvt_box_2_polygon(box1_conners)
+    box1_area = box1_polygon.area
+
+    box2_conners = get_corners_torch(box2[0], box2[1], box2[2], box2[3], box2[4])
+    box2_polygon = cvt_box_2_polygon(box2_conners)
+    box2_area = box2_polygon.area
+
+    intersection = box2_polygon.intersection(box1_polygon).area
+    union = box1_area + box2_area - intersection
+    iou = intersection / (union + 1e-16)
+
+    print('Shapely- box1_area: {:.2f}, box2_area: {:.2f}, inter: {:.2f}, iou: {:.4f}'.format(box1_area, box2_area,
+                                                                                             intersection, iou))
+
+    print('intersection from intersection_area(): {}'.format(intersection_area(box1_conners, box2_conners)))
+
+    img = cv2.polylines(img, [box1_conners.cpu().numpy().astype(np.int)], True, (255, 0, 0), 2)
+    img = cv2.polylines(img, [box2_conners.cpu().numpy().astype(np.int)], True, (0, 255, 0), 2)
+
+    while True:
+        cv2.imshow('img', img)
+        if cv2.waitKey(0) & 0xff == 27:
+            break
