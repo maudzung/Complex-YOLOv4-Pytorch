@@ -118,6 +118,12 @@ def intersection_area(r1, r2):
                      zip(intersection, intersection[1:] + intersection[:1]))
 
 
+def PolyArea2D(pts):
+    roll_pts = torch.roll(pts, -1, dims=0)
+    area = (pts[:, 0] * roll_pts[:, 1] - pts[:, 1] * roll_pts[:, 0]).sum().abs() * 0.5
+    return area
+
+
 if __name__ == '__main__':
     box1 = torch.tensor([100, 100, 40, 20, pi / 3], dtype=torch.float).cuda()
     box2 = torch.tensor([100, 100, 40, 20, 0], dtype=torch.float).cuda()
