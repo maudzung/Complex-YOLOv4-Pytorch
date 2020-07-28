@@ -27,8 +27,7 @@ from models.model_utils import create_model
 from utils.misc import make_folder
 from utils.evaluation_utils import post_processing, rescale_boxes, post_processing_v2
 from utils.misc import time_synchronized
-from utils.prediction_utils import predictions_to_kitti_format
-from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev
+from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev, predictions_to_kitti_format
 
 
 def parse_test_configs():

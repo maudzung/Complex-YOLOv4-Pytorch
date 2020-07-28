@@ -165,8 +165,8 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
         true_positives = np.zeros(pred_boxes.shape[0])
 
         annotations = targets[targets[:, 0] == sample_i][:, 1:]
-        target_labels = annotations[:, 0] if len(annotations) else []
-        if len(annotations):
+        if len(annotations) > 0:
+            target_labels = annotations[:, 0]
             detected_boxes = []
             target_boxes = annotations[:, 1:]
 
@@ -180,14 +180,13 @@ def get_batch_statistics_rotated_bbox(outputs, targets, iou_threshold):
                 if pred_label not in target_labels:
                     continue
 
-                # iou, box_index = rotated_bbox_iou(pred_box.unsqueeze(0), target_boxes, 1.0, False).squeeze().max(0)
-                ious = iou_rotated_single_vs_multi_boxes_cpu(pred_box, target_boxes)
-                iou, box_index = ious.max(dim=0)
+                iou, box_index = iou_rotated_single_vs_multi_boxes_cpu(pred_box, target_boxes).max(dim=0)
 
                 if iou >= iou_threshold and box_index not in detected_boxes:
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
         batch_metrics.append([true_positives, pred_scores, pred_labels])
+
     return batch_metrics
 
 
@@ -293,6 +292,7 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
 
     # confs: [batch, num, num_classes]
     confs = outputs[:, :, 6:7] * outputs[:, :, 7:]
+    obj_confs = outputs[:, :, 6]
 
     # [batch, num, num_classes] --> [batch, num]
     max_conf = np.max(confs, axis=2)
@@ -303,6 +303,7 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
     for i in range(batch_size):
         argwhere = max_conf[i] > conf_thresh
         l_box_array = box_array[i, argwhere, :]
+        l_obj_confs = obj_confs[i, argwhere, :]
         l_max_conf = max_conf[i, argwhere]
         l_max_id = max_id[i, argwhere]
 
@@ -310,9 +311,10 @@ def post_processing(outputs, conf_thresh=0.95, nms_thresh=0.4):
 
         if (keep.size > 0):
             l_box_array = l_box_array[keep, :]
+            l_obj_confs = l_obj_confs[keep].reshape(-1, 1)
             l_max_conf = l_max_conf[keep].reshape(-1, 1)
             l_max_id = l_max_id[keep].reshape(-1, 1)
-            bboxes_batch[i] = np.concatenate((l_box_array, l_max_conf, l_max_id), axis=-1)
+            bboxes_batch[i] = np.concatenate((l_box_array, l_obj_confs, l_max_conf, l_max_id), axis=-1)
     return bboxes_batch
 
 

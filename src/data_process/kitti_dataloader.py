@@ -85,8 +85,7 @@ if __name__ == '__main__':
 
     import data_process.kitti_bev_utils as bev_utils
     from data_process import kitti_data_utils
-    from utils.prediction_utils import invert_target
-    from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev
+    from utils.visualization_utils import show_image_with_boxes, merge_rgb_to_bev, invert_target
     import config.kitti_config as cnf
 
     parser = argparse.ArgumentParser(description='Complexer YOLO Implementation')
@@ -119,11 +118,19 @@ if __name__ == '__main__':
                         help='If true, random padding if using mosaic augmentation')
     parser.add_argument('--output-width', type=int, default=608,
                         help='the width of showing output, the height maybe vary')
+    parser.add_argument('--save_img', action='store_true',
+                        help='If true, save the images')
 
     configs = edict(vars(parser.parse_args()))
     configs.distributed = False  # For testing
     configs.pin_memory = False
     configs.dataset_dir = os.path.join('../../', 'dataset', 'kitti')
+
+    if configs.save_img:
+        print('saving validation images')
+        configs.saved_dir = os.path.join(configs.dataset_dir, 'validation_data')
+        if not os.path.isdir(configs.saved_dir):
+            os.makedirs(configs.saved_dir)
 
     if configs.show_train_data:
         dataloader, _ = create_train_dataloader(configs)
@@ -158,10 +165,19 @@ if __name__ == '__main__':
         img_bev = cv2.rotate(img_bev, cv2.ROTATE_180)
 
         if configs.mosaic and configs.show_train_data:
-            cv2.imshow('mosaic_sample', img_bev)
+            if configs.save_img:
+                fn = os.path.basename(img_file)
+                cv2.imwrite(os.path.join(configs.saved_dir, fn), img_bev)
+            else:
+                cv2.imshow('mosaic_sample', img_bev)
         else:
             out_img = merge_rgb_to_bev(img_rgb, img_bev, output_width=configs.output_width)
-            cv2.imshow('single_sample', out_img)
+            if configs.save_img:
+                fn = os.path.basename(img_file)
+                cv2.imwrite(os.path.join(configs.saved_dir, fn), out_img)
+            else:
+                cv2.imshow('single_sample', out_img)
 
-        if cv2.waitKey(0) & 0xff == 27:
-            break
+        if not configs.save_img:
+            if cv2.waitKey(0) & 0xff == 27:
+                break
