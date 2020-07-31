@@ -95,37 +95,26 @@ python kitti_dataloader.py --show-train-data --cutout_prob 1. --cutout_nholes 1 
 
 #### 2.4.2. Inference
 
+Download the trained model from [**_here_**](https://drive.google.com/drive/folders/1RHD9PBvk-9SjbKwoi_Q1kl9-UGFo2Pth?usp=sharing), 
+then put it to `${ROOT}/checkpoints/` and execute:
+
 ```shell script
-python test.py --gpu_idx 0 --pretrained_path <PATH>...
+python test.py --gpu_idx 0 --pretrained_path ../checkpoints/complex_yolov4/complex_yolov4_mse_loss.pth --cfgfile ./config/cfg/complex_yolov4.cfg 
 ```
 
 #### 2.4.3. Evaluation
 
 ```shell script
-python evaluate.py --gpu_idx 0 --pretrained_path <PATH> --img_size <SIZE> --conf-thresh <THRESH> --nms-thresh <THRESH> --iou-thresh <THRESH>...
+python evaluate.py --gpu_idx 0 --pretrained_path <PATH> --cfgfile <CFG> --img_size <SIZE> --conf-thresh <THRESH> --nms-thresh <THRESH> --iou-thresh <THRESH>
 ```
 (The `conf-thresh`, `nms-thresh`, and `iou-thresh` params can be adjusted. By default, these params have been set to _**0.5**_)
-
-
-- Evaluate the _**complex-YOLOv3**_ model on the validation set: <br>
-Download the trained model from [**_here_**](https://drive.google.com/file/d/1gEpVxfgJZ9CTDt1ym2W0M5OHDjdCZzAw/view?usp=sharing), 
-then put it to `${ROOT}/checkpoints/complex_yolov3/complex_yolov3.pth` and execute:
-
-```shell script
-python evaluate.py --gpu_idx 0 --pretrained_path ../checkpoints/complex_yolov3/complex_yolov3.pth --cfgfile ./config/cfg/complex_yolov3.cfg 
-```
-
-
-- **_(Complex-YOLOv4 trained model will be released. Please watch the repo to get notifications for next update.)_**
-
-- The comparison of this implementation with Complex-YOLOv2, Complex-YOLOv3 _(will be updated ASAP)_.
 
 #### 2.4.4. Training
 
 ##### 2.4.4.1. Single machine, single gpu
 
 ```shell script
-python train.py --gpu_idx 0 --multiscale_training --batch_size <N> --num_workers <N>...
+python train.py --gpu_idx 0 --batch_size <N> --num_workers <N>...
 ```
 
 ##### 2.4.4.2. Multi-processing Distributed Data Parallel Training
@@ -209,7 +198,6 @@ Thank you!
 ```
 ${ROOT}
 └── checkpoints/    
-    ├── complex_yolov2/
     ├── complex_yolov3/
     └── complex_yolov4/
 └── dataset/    
@@ -247,16 +235,12 @@ ${ROOT}
     │   ├── darknet2pytorch.py
     │   ├── darknet_utils.py
     │   ├── model_utils.py
-    │   ├── region_loss.py
     │   ├── yolo_layer.py
-    │   └── yolov4_model.py
     └── utils/
-    │   ├── detection_utils.py
     │   ├── evaluation_utils.py
     │   ├── iou_utils.py
     │   ├── logger.py
     │   ├── misc.py
-    │   ├── prediction_utils.py
     │   ├── torch_utils.py
     │   ├── train_utils.py
     │   └── visualization_utils.py
