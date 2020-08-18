@@ -61,7 +61,7 @@ def parse_train_configs():
                         help='If true, dont evaluate the model on the val set')
     parser.add_argument('--num_samples', type=int, default=None,
                         help='Take a subset of the dataset to run and debug')
-    parser.add_argument('--num_workers', type=int, default=8,
+    parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of threads for loading data')
     parser.add_argument('--batch_size', type=int, default=4,
                         help='mini-batch size (default: 4), this is the total'
@@ -69,10 +69,10 @@ def parse_train_configs():
                              'Data Parallel or Distributed Data Parallel')
     parser.add_argument('--print_freq', type=int, default=50, metavar='N',
                         help='print frequency (default: 50)')
-    parser.add_argument('--tensorboard_freq', type=int, default=20, metavar='N',
-                        help='frequency of saving tensorboard (default: 20)')
-    parser.add_argument('--checkpoint_freq', type=int, default=2, metavar='N',
-                        help='frequency of saving checkpoints (default: 2)')
+    parser.add_argument('--tensorboard_freq', type=int, default=50, metavar='N',
+                        help='frequency of saving tensorboard (default: 50)')
+    parser.add_argument('--checkpoint_freq', type=int, default=5, metavar='N',
+                        help='frequency of saving checkpoints (default: 5)')
     ####################################################################
     ##############     Training strategy            ####################
     ####################################################################
@@ -83,14 +83,14 @@ def parse_train_configs():
                         help='number of total epochs to run')
     parser.add_argument('--lr_type', type=str, default='cosin',
                         help='the type of learning rate scheduler (cosin or multi_step)')
-    parser.add_argument('--lr', type=float, default=0.0025, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='initial learning rate')
     parser.add_argument('--minimum_lr', type=float, default=1e-7, metavar='MIN_LR',
                         help='minimum learning rate during training')
     parser.add_argument('--momentum', type=float, default=0.949, metavar='M',
                         help='momentum')
     parser.add_argument('-wd', '--weight_decay', type=float, default=5e-4, metavar='WD',
-                        help='weight decay (default: 1e-6)')
+                        help='weight decay (default: 5e-4)')
     parser.add_argument('--optimizer_type', type=str, default='adam', metavar='OPTIMIZER',
                         help='the type of optimizer, it can be sgd or adam')
     parser.add_argument('--burn_in', type=int, default=50, metavar='N',
