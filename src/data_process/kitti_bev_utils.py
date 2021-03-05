@@ -141,7 +141,7 @@ def build_yolo_target(labels):
 def inverse_yolo_target(targets, bc):
     labels = []
     for t in targets:
-        c, y, x, w, l, im, re = t
+        c, y, x, w, l, im, re, conf = t
         z, h = -1.55, 1.5
         if c == 1:
             h = 1.8
@@ -154,7 +154,7 @@ def inverse_yolo_target(targets, bc):
         l = l * (bc["maxX"] - bc["minX"])
         w -= 0.3
         l -= 0.3
-        labels.append([c, x, y, z, h, w, l, - np.arctan2(im, re) - 2 * np.pi])
+        labels.append([c, x, y, z, h, w, l, - np.arctan2(im, re) - 2 * np.pi, conf])
 
     return np.array(labels)
 
