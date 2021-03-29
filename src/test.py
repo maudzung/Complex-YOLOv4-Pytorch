@@ -36,16 +36,16 @@ def parse_test_configs():
                         help='The name using for saving logs, models,...')
     parser.add_argument('-a', '--arch', type=str, default='darknet', metavar='ARCH',
                         help='The name of the model architecture')
-    parser.add_argument('--cfgfile', type=str, default='E:/LiDAR_OD/Complex-YOLOv4-Pytorch/src/config/cfg/complex_yolov4.cfg', metavar='PATH',
+    parser.add_argument('--cfgfile', type=str, default='./config/cfg/complex_yolov4.cfg', metavar='PATH',
                         help='The path for cfgfile (only for darknet)')
-    parser.add_argument('--pretrained_path', type=str, default='E:/LiDAR_OD/Complex-YOLOv4-Pytorch/checkpoints/complex_yolov4/complex_yolov4_mse_loss.pth', metavar='PATH',
+    parser.add_argument('--pretrained_path', type=str, default='None', metavar='PATH',
                         help='the path of the pretrained checkpoint')
     parser.add_argument('--use_giou_loss', action='store_true',
                         help='If true, use GIoU loss during training. If false, use MSE loss for training')
 
     parser.add_argument('--no_cuda', action='store_true',
                         help='If true, cuda is not used.')
-    parser.add_argument('--gpu_idx', default=0, type=int,
+    parser.add_argument('--gpu_idx', default=None, type=int,
                         help='GPU index to use.')
 
     parser.add_argument('--img_size', type=int, default=608,
@@ -64,7 +64,7 @@ def parse_test_configs():
 
     parser.add_argument('--show_image', action='store_true',
                         help='If true, show the image during demostration')
-    parser.add_argument('--save_test_output', action='store_true', default=True,
+    parser.add_argument('--save_test_output', action='store_true',
                         help='If true, the output image of the testing phase will be saved')
     parser.add_argument('--output_format', type=str, default='image', metavar='PATH',
                         help='the type of the test output (support image or video)')
@@ -77,7 +77,7 @@ def parse_test_configs():
     ####################################################################
     ##############Dataset, Checkpoints, and results dir configs#########
     ####################################################################
-    configs.working_dir = 'E:/LiDAR_OD/Complex-YOLOv4-Pytorch'
+    configs.working_dir = '../'
     configs.dataset_dir = os.path.join(configs.working_dir, 'dataset', 'kitti')
 
     if configs.save_test_output:
