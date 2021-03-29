@@ -93,15 +93,15 @@ def camera_to_lidar_box(boxes, V2C=None, R0=None, P2=None):
 
 
 def lidar_to_camera_box(boxes, V2C=None, R0=None, P2=None):
-    # (N, 7) -> (N, 7) x,y,z,h,w,l,r
+    # (N, 8) -> (N, 8) x,y,z,h,w,l,r,conf
     ret = []
     for box in boxes:
-        x, y, z, h, w, l, rz = box
-        (x, y, z), h, w, l, ry = lidar_to_camera(
-            x, y, z, V2C=V2C, R0=R0, P2=P2), h, w, l, -rz - np.pi / 2
+        x, y, z, h, w, l, rz, conf = box
+        (x, y, z), h, w, l, ry, conf = lidar_to_camera(
+            x, y, z, V2C=V2C, R0=R0, P2=P2), h, w, l, -rz - np.pi / 2, conf
         # ry = angle_in_limit(ry)
-        ret.append([x, y, z, h, w, l, ry])
-    return np.array(ret).reshape(-1, 7)
+        ret.append([x, y, z, h, w, l, ry, conf])
+    return np.array(ret).reshape(-1, 8)
 
 
 def center_to_corner_box2d(boxes_center, coordinate='lidar'):

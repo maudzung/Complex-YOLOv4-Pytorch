@@ -284,8 +284,8 @@ def predictions_to_kitti_format(img_detections, calib, img_shape_2d, img_size, R
         if detections is None:
             continue
         # Rescale boxes to original image
-        for x, y, w, l, im, re, *_, cls_pred in detections:
-            predictions.append([cls_pred, x / img_size, y / img_size, w / img_size, l / img_size, im, re])
+        for x, y, w, l, im, re, pred_conf, _, cls_pred in detections:
+            predictions.append([cls_pred, x / img_size, y / img_size, w / img_size, l / img_size, im, re, pred_conf])
 
     predictions = kitti_bev_utils.inverse_yolo_target(np.array(predictions), cnf.boundary)
     if predictions.shape[0]:
@@ -308,6 +308,7 @@ def predictions_to_kitti_format(img_detections, calib, img_shape_2d, img_size, R
         obj.t = l[1:4]
         obj.h, obj.w, obj.l = l[4:7]
         obj.ry = np.arctan2(math.sin(l[7]), math.cos(l[7]))
+        obj.score = l[8]
 
         _, corners_3d = kitti_data_utils.compute_box_3d(obj, calib.P)
         corners3d.append(corners_3d)
