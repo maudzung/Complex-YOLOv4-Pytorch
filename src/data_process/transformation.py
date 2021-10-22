@@ -373,6 +373,36 @@ class Random_Scaling(object):
         return lidar, labels
 
 
+class Random_Translate(object):
+    def __init__(
+        self, 
+        translate_range_x=(-0.1, 0.1), 
+        translate_range_y=(-0.1, 0.1), 
+        p=0.5
+        ):
+        #Translate ranges from [-1, 1]
+        #With 1 being the full length of BEV in x/y direction
+        self.x_range = translate_range_x
+        self.y_range = translate_range_y
+        self.p = p
+
+    def __call__(self, lidar, labels):
+        if np.random.random() <= self.p:
+            factor_x =  np.random.uniform(self.x_range[0], self.x_range[1])
+            factor_y =  np.random.uniform(self.y_range[0], self.y_range[1])
+
+            factor_x *= (cnf.boundary["maxX"] - cnf.boundary["minX"])
+            factor_y *= (cnf.boundary["maxY"] - cnf.boundary["minY"])
+
+            lidar[:, 0] += factor_x
+            lidar[:, 1] += factor_y
+
+            labels[:, 0] += factor_x
+            labels[:, 1] += factor_y
+
+        return lidar, labels
+
+
 class Horizontal_Flip(object):
     def __init__(self, p=0.5):
         self.p = p
