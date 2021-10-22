@@ -79,7 +79,7 @@ class KittiDataset(Dataset):
         sample_id = int(self.sample_id_list[index])
         lidarData = self.get_lidar(sample_id)
         b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
-        rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
+        rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION_X, cnf.DISCRETIZATION_Y, cnf.boundary)
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
         return img_file, rgb_map
@@ -103,7 +103,7 @@ class KittiDataset(Dataset):
             lidarData, labels[:, 1:] = self.lidar_transforms(lidarData, labels[:, 1:])
 
         b = kitti_bev_utils.removePoints(lidarData, cnf.boundary)
-        rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION, cnf.boundary)
+        rgb_map = kitti_bev_utils.makeBVFeature(b, cnf.DISCRETIZATION_X, cnf.DISCRETIZATION_Y, cnf.boundary)
         target = kitti_bev_utils.build_yolo_target(labels)
         img_file = os.path.join(self.image_dir, '{:06d}.png'.format(sample_id))
 
