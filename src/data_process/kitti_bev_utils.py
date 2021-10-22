@@ -34,14 +34,18 @@ def removePoints(PointCloud, BoundaryCond):
     return PointCloud
 
 
-def makeBVFeature(PointCloud_, Discretization, bc):
+def makeBVFeature(PointCloud_, Discretization_X, Discretization_Y, bc):
     Height = cnf.BEV_HEIGHT + 1
     Width = cnf.BEV_WIDTH + 1
 
     # Discretize Feature Map
     PointCloud = np.copy(PointCloud_)
-    PointCloud[:, 0] = np.int_(np.floor(PointCloud[:, 0] / Discretization))
-    PointCloud[:, 1] = np.int_(np.floor(PointCloud[:, 1] / Discretization) + Width / 2)
+    
+    offset_x = np.int_(np.floor(bc['minX'] / Discretization_X))
+    offset_y = np.int_(np.floor(bc['minY'] / Discretization_Y))
+    
+    PointCloud[:, 0] = np.int_(np.floor(PointCloud[:, 0] / Discretization_X)) - offset_x
+    PointCloud[:, 1] = np.int_(np.floor(PointCloud[:, 1] / Discretization_Y)) - offset_y
 
     # sort-3times
     indices = np.lexsort((-PointCloud[:, 2], PointCloud[:, 1], PointCloud[:, 0]))
