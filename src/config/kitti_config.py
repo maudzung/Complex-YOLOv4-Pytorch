@@ -33,7 +33,8 @@ boundary_back = {
 BEV_WIDTH = 608  # across y axis -25m ~ 25m
 BEV_HEIGHT = 608  # across x axis 0m ~ 50m
 
-DISCRETIZATION = (boundary["maxX"] - boundary["minX"]) / BEV_HEIGHT
+DISCRETIZATION_X = (boundary["maxX"] - boundary["minX"]) / BEV_HEIGHT
+DISCRETIZATION_Y = (boundary["maxY"] - boundary["minY"]) / BEV_WIDTH
 
 colors = [[0, 255, 255], [0, 0, 255], [255, 0, 0]]
 
