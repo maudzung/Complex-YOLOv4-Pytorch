@@ -42,16 +42,12 @@ def camera_to_lidar(x, y, z, V2C=None, R0=None, P2=None):
     return tuple(p)
 
 
-def lidar_to_camera(x, y, z, V2C=None, R0=None, P2=None):
+def lidar_to_camera(x, y, z, h, V2C=None, R0=None, P2=None):
+    z = -h/2
     p = np.array([x, y, z, 1])
-    if V2C is None or R0 is None:
-        p = np.matmul(cnf.Tr_velo_to_cam, p)
-        p = np.matmul(cnf.R0, p)
-    else:
-        p = np.matmul(V2C, p)
-        p = np.matmul(R0, p)
-    p = p[0:3]
-    return tuple(p)
+    
+    p = np.dot(p, np.dot(V2C.T, R0.T))
+    return tuple(p[:3])
 
 
 def camera_to_lidar_point(points):
@@ -98,7 +94,7 @@ def lidar_to_camera_box(boxes, V2C=None, R0=None, P2=None):
     for box in boxes:
         x, y, z, h, w, l, rz = box
         (x, y, z), h, w, l, ry = lidar_to_camera(
-            x, y, z, V2C=V2C, R0=R0, P2=P2), h, w, l, -rz - np.pi / 2
+            x, y, z, h, V2C=V2C, R0=R0, P2=P2), h, w, l, -rz - np.pi / 2
         # ry = angle_in_limit(ry)
         ret.append([x, y, z, h, w, l, ry])
     return np.array(ret).reshape(-1, 7)
